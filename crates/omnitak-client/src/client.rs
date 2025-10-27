@@ -2,9 +2,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
 use std::time::Duration;
-use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 /// Configuration for auto-reconnect behavior
 #[derive(Debug, Clone)]

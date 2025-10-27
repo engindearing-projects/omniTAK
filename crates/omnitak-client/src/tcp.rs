@@ -1,6 +1,5 @@
 use crate::client::{
-    ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, TakClient,
-    connect_with_retry,
+    calculate_backoff, ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, TakClient,
 };
 use crate::state::{ConnectionState, ConnectionStatus};
 use anyhow::{anyhow, Context, Result};
@@ -139,23 +138,21 @@ impl TcpClient {
 
     /// Read a frame from the stream
     async fn read_frame(&mut self, buffer: &mut BytesMut) -> Result<Option<bytes::Bytes>> {
-        let stream = self
-            .stream
-            .as_mut()
-            .ok_or_else(|| anyhow!("Not connected"))?;
-
         match self.config.framing {
-            FramingMode::Newline => self.read_newline_frame(stream, buffer).await,
-            FramingMode::LengthPrefixed => self.read_length_prefixed_frame(stream, buffer).await,
+            FramingMode::Newline => self.read_newline_frame(buffer).await,
+            FramingMode::LengthPrefixed => self.read_length_prefixed_frame(buffer).await,
         }
     }
 
     /// Read a newline-delimited frame
     async fn read_newline_frame(
         &mut self,
-        stream: &mut TcpStream,
         buffer: &mut BytesMut,
     ) -> Result<Option<bytes::Bytes>> {
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or_else(|| anyhow!("Not connected"))?;
         loop {
             // Check if we have a complete frame in the buffer
             if let Some(pos) = buffer.iter().position(|&b| b == NEWLINE_DELIMITER) {
@@ -198,9 +195,12 @@ impl TcpClient {
     /// Read a length-prefixed frame
     async fn read_length_prefixed_frame(
         &mut self,
-        stream: &mut TcpStream,
         buffer: &mut BytesMut,
     ) -> Result<Option<bytes::Bytes>> {
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or_else(|| anyhow!("Not connected"))?;
         loop {
             // Check if we have at least 4 bytes for the length header
             if buffer.len() >= 4 {
@@ -393,11 +393,51 @@ impl TcpClient {
 impl TakClient for TcpClient {
     async fn connect(&mut self) -> Result<()> {
         let config = self.config.base.reconnect.clone();
-        let result = connect_with_retry(
-            || async { self.establish_connection().await },
-            &config,
-        )
-        .await;
+
+        // Inline retry logic to avoid closure capture issues
+        let result = if !config.enabled {
+            self.establish_connection().await
+        } else {
+            let mut attempt = 0u32;
+            loop {
+                match self.establish_connection().await {
+                    Ok(()) => {
+                        if attempt > 0 {
+                            info!(
+                                attempt = attempt,
+                                "Successfully reconnected after {} attempts",
+                                attempt
+                            );
+                        }
+                        break Ok(());
+                    }
+                    Err(e) => {
+                        attempt += 1;
+
+                        if let Some(max) = config.max_attempts {
+                            if attempt >= max {
+                                error!(
+                                    attempt = attempt,
+                                    error = %e,
+                                    "Max reconnect attempts reached"
+                                );
+                                break Err(e);
+                            }
+                        }
+
+                        let backoff = calculate_backoff(attempt - 1, &config);
+                        warn!(
+                            attempt = attempt,
+                            backoff_secs = backoff.as_secs(),
+                            error = %e,
+                            "Connection attempt failed, retrying after backoff"
+                        );
+
+                        tokio::time::sleep(backoff).await;
+                    }
+                }
+            }
+        };
 
         if result.is_ok() {
             self.start_receive_task();

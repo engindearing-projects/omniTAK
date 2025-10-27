@@ -216,6 +216,7 @@ impl ConnectionPool {
         let state = Arc::new(ConnectionState::new());
         let state_clone = Arc::clone(&state);
         let id_clone = id.clone();
+        let address_clone = address.clone();
         let metrics = Arc::clone(&self.metrics);
         let shutdown = Arc::clone(&self.shutdown);
 
@@ -223,7 +224,7 @@ impl ConnectionPool {
         let task = tokio::spawn(async move {
             info!(
                 connection_id = %id_clone,
-                address = %address,
+                address = %address_clone,
                 "Connection handler started"
             );
 
@@ -317,10 +318,20 @@ impl ConnectionPool {
         connection.state.deactivate();
 
         // Wait for task to complete (with timeout)
-        tokio::select! {
-            _ = &mut connection.task => {}
-            _ = tokio::time::sleep(Duration::from_secs(5)) => {
-                warn!(connection_id = %id, "Connection task did not complete in time");
+        // Try to unwrap the Arc to get ownership of the task
+        match Arc::try_unwrap(connection) {
+            Ok(mut conn) => {
+                tokio::select! {
+                    _ = &mut conn.task => {}
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {
+                        warn!(connection_id = %id, "Connection task did not complete in time");
+                    }
+                }
+            }
+            Err(arc_conn) => {
+                // Arc is still shared, just abort the task
+                warn!(connection_id = %id, "Cannot unwrap Arc, aborting task");
+                arc_conn.task.abort();
             }
         }
 

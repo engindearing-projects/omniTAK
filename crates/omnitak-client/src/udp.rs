@@ -105,19 +105,32 @@ impl UdpClient {
 
         info!("Binding UDP socket to {}", local_addr);
 
-        let socket = UdpSocket::bind(local_addr)
-            .await
-            .context("Failed to bind UDP socket")?;
+        // Create socket with socket2 to configure buffer sizes
+        let socket2 = socket2::Socket::new(
+            if local_addr.is_ipv4() {
+                socket2::Domain::IPV4
+            } else {
+                socket2::Domain::IPV6
+            },
+            socket2::Type::DGRAM,
+            Some(socket2::Protocol::UDP),
+        )
+        .context("Failed to create UDP socket")?;
+
+        // Set socket buffer sizes (best-effort, ignore errors)
+        let _ = socket2.set_recv_buffer_size(self.config.recv_buffer_size);
+
+        // Set socket to non-blocking for tokio
+        socket2.set_nonblocking(true)?;
+        socket2.bind(&local_addr.into())?;
+
+        // Convert to tokio UdpSocket
+        let socket: UdpSocket = UdpSocket::from_std(socket2.into())?;
 
         // Configure multicast if enabled
         if self.config.multicast {
             self.configure_multicast(&socket, &remote_addr)?;
         }
-
-        // Set socket buffer sizes
-        socket
-            .set_recv_buffer_size(self.config.recv_buffer_size)
-            .ok(); // Ignore errors as this is best-effort
 
         self.socket = Some(Arc::new(socket));
         self.status.set_state(ConnectionState::Connected);

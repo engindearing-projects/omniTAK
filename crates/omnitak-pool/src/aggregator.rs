@@ -313,7 +313,7 @@ impl MessageAggregator {
                 let hash = Self::calculate_hash(&msg.data);
 
                 // Check for duplicate
-                let is_duplicate = dedup_cache.check_and_record(uid.clone(), msg.source, hash);
+                let is_duplicate = dedup_cache.check_and_record(uid.clone(), msg.source.clone(), hash);
 
                 if is_duplicate {
                     metrics.record_duplicate();

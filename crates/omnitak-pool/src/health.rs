@@ -247,29 +247,31 @@ impl HealthMonitor {
 
                 for connection in connections {
                     // Check if circuit allows health check
-                    let mut circuits_guard = circuits.write();
-                    let circuit = circuits_guard
-                        .entry(connection.id.clone())
-                        .or_insert_with(|| {
-                            CircuitBreaker::new(
-                                config.circuit_failure_threshold,
-                                config.circuit_reset_timeout,
-                                config.circuit_success_threshold,
-                            )
-                        });
+                    let allows_request = {
+                        let mut circuits_guard = circuits.write();
+                        let circuit = circuits_guard
+                            .entry(connection.id.clone())
+                            .or_insert_with(|| {
+                                CircuitBreaker::new(
+                                    config.circuit_failure_threshold,
+                                    config.circuit_reset_timeout,
+                                    config.circuit_success_threshold,
+                                )
+                            });
 
-                    // Transition to half-open if ready
-                    circuit.check_half_open();
+                        // Transition to half-open if ready
+                        circuit.check_half_open();
 
-                    if !circuit.allows_request() {
+                        circuit.allows_request()
+                    }; // circuits_guard is dropped here
+
+                    if !allows_request {
                         debug!(
                             connection_id = %connection.id,
                             "Skipping health check - circuit breaker open"
                         );
                         continue;
                     }
-
-                    drop(circuits_guard);
 
                     // Perform health check
                     let check_result = Self::perform_health_check(

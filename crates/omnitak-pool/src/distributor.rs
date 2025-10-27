@@ -16,7 +16,7 @@ use crate::metrics::DistributorMetrics;
 use crate::pool::{ConnectionId, ConnectionPool, PoolMessage};
 
 /// Filter rule for message distribution
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum FilterRule {
     /// Always send to this connection
     AlwaysSend,
@@ -30,6 +30,24 @@ pub enum FilterRule {
     ByGeoBounds { lat: f64, lon: f64, radius_km: f64 },
     /// Custom filter function
     Custom(Arc<dyn Fn(&[u8]) -> bool + Send + Sync>),
+}
+
+impl std::fmt::Debug for FilterRule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AlwaysSend => write!(f, "AlwaysSend"),
+            Self::NeverSend => write!(f, "NeverSend"),
+            Self::ByType(types) => f.debug_tuple("ByType").field(types).finish(),
+            Self::ByCallsign(pattern) => f.debug_tuple("ByCallsign").field(pattern).finish(),
+            Self::ByGeoBounds { lat, lon, radius_km } => f
+                .debug_struct("ByGeoBounds")
+                .field("lat", lat)
+                .field("lon", lon)
+                .field("radius_km", radius_km)
+                .finish(),
+            Self::Custom(_) => write!(f, "Custom(<function>)"),
+        }
+    }
 }
 
 impl FilterRule {
@@ -271,7 +289,12 @@ impl MessageDistributor {
 
         // Get active connections
         let connections = pool.get_active_connections();
-        let filter_map = filters.read();
+
+        // Clone filter rules to avoid holding the lock across awaits
+        let connection_filters: HashMap<String, Vec<FilterRule>> = {
+            let filter_map = filters.read();
+            filter_map.clone()
+        }; // filter_map guard is dropped here
 
         for msg in batch.drain(..) {
             metrics.record_message_received();
@@ -287,7 +310,7 @@ impl MessageDistributor {
                 }
 
                 // Check filters
-                let should_send = if let Some(rules) = filter_map.get(&connection.id) {
+                let should_send = if let Some(rules) = connection_filters.get(&connection.id) {
                     rules.iter().any(|rule| rule.matches(&msg.data))
                 } else {
                     // No filters = send to all (default behavior)
@@ -299,20 +322,22 @@ impl MessageDistributor {
                 }
 
                 // Attempt to send based on strategy
-                let send_result = match config.strategy {
+                let send_result: Result<(), String> = match config.strategy {
                     DistributionStrategy::DropOnFull => {
                         connection.tx.try_send(PoolMessage::Cot(msg.data.clone()))
+                            .map_err(|e| e.to_string())
                     }
                     DistributionStrategy::BlockOnFull => {
                         connection.tx.send_async(PoolMessage::Cot(msg.data.clone())).await
+                            .map_err(|e| e.to_string())
                     }
                     DistributionStrategy::TryForTimeout(timeout) => {
                         tokio::select! {
                             result = connection.tx.send_async(PoolMessage::Cot(msg.data.clone())) => {
-                                result
+                                result.map_err(|e| e.to_string())
                             }
                             _ = tokio::time::sleep(timeout) => {
-                                Err(flume::SendError(PoolMessage::Cot(msg.data.clone())))
+                                Err("Send timeout".to_string())
                             }
                         }
                     }

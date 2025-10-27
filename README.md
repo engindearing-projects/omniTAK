@@ -51,7 +51,14 @@ omnitak/
 
 ### Prerequisites
 - Rust 1.90+ ([Install](https://rustup.rs/))
+- Protocol Buffers compiler (protoc)
+  - macOS: `brew install protobuf`
+  - Ubuntu/Debian: `apt install protobuf-compiler`
+  - Fedora/RHEL: `dnf install protobuf-compiler`
+  - Windows: Download from [GitHub releases](https://github.com/protocolbuffers/protobuf/releases)
 - (Optional) Docker for containerized deployment
+
+> **⚠️ Build Status**: The project currently has compilation errors that prevent building. See [Known Issues](#known-issues) below.
 
 ### Build from Source
 
@@ -261,6 +268,37 @@ OmniTAK is designed for tactical battlefield coordination:
 - [FreeTAKServer](https://github.com/FreeTAKTeam/FreeTakServer) - Python TAK server
 - [TAKy](https://github.com/tkuester/taky) - Minimal TAK server
 - [OpenTAKServer](https://github.com/brian7704/OpenTAKServer) - Flask-based TAK server
+
+## ⚠️ Known Issues
+
+### Compilation Errors (As of 2025-10-27)
+
+The project currently does not build due to the following issues in `omnitak-client`:
+
+**1. Multiple Mutable Borrow Errors (tcp.rs:148, 149)**
+- Error: Cannot borrow `*self` as mutable more than once at a time
+- Location: `crates/omnitak-client/src/tcp.rs` lines 148-149
+- Affects: `read_newline_frame` and `read_length_prefixed_frame` methods
+
+**2. Missing Method (udp.rs:119)**
+- Error: No method named `set_recv_buffer_size` found for `tokio::net::UdpSocket`
+- Location: `crates/omnitak-client/src/udp.rs` line 119
+- Note: This method may have been removed or renamed in newer Tokio versions
+
+**3. Closure Capture Errors (tcp.rs:397, tls.rs:423, websocket.rs:302)**
+- Error: Captured variable cannot escape `FnMut` closure body
+- Location: Multiple files in reconnection logic
+- Affects: `connect` methods using retry logic
+
+**Additional Warnings:**
+- Unused imports in several files
+- Unused variables in websocket implementation
+
+### Setup Requirements Not in Original README
+
+The following dependencies are required but were not documented:
+- **Protocol Buffers compiler (protoc)** - Required for building CoT protobuf definitions
+  - Must be installed before running `cargo build`
 
 ## 📞 Support
 

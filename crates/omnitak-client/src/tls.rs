@@ -1,12 +1,11 @@
 use crate::client::{
-    ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, TakClient,
-    connect_with_retry,
+    calculate_backoff, ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, TakClient,
 };
 use crate::state::{ConnectionState, ConnectionStatus};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use bytes::{Buf, BytesMut};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
+use bytes::BytesMut;
+use rustls::pki_types::{CertificateDer, ServerName};
 use rustls::{ClientConfig as RustlsConfig, RootCertStore};
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -419,11 +418,51 @@ impl TlsClient {
 impl TakClient for TlsClient {
     async fn connect(&mut self) -> Result<()> {
         let config = self.config.base.reconnect.clone();
-        let result = connect_with_retry(
-            || async { self.establish_connection().await },
-            &config,
-        )
-        .await;
+
+        // Inline retry logic to avoid closure capture issues
+        let result = if !config.enabled {
+            self.establish_connection().await
+        } else {
+            let mut attempt = 0u32;
+            loop {
+                match self.establish_connection().await {
+                    Ok(()) => {
+                        if attempt > 0 {
+                            info!(
+                                attempt = attempt,
+                                "Successfully reconnected after {} attempts",
+                                attempt
+                            );
+                        }
+                        break Ok(());
+                    }
+                    Err(e) => {
+                        attempt += 1;
+
+                        if let Some(max) = config.max_attempts {
+                            if attempt >= max {
+                                error!(
+                                    attempt = attempt,
+                                    error = %e,
+                                    "Max reconnect attempts reached"
+                                );
+                                break Err(e);
+                            }
+                        }
+
+                        let backoff = calculate_backoff(attempt - 1, &config);
+                        warn!(
+                            attempt = attempt,
+                            backoff_secs = backoff.as_secs(),
+                            error = %e,
+                            "Connection attempt failed, retrying after backoff"
+                        );
+
+                        tokio::time::sleep(backoff).await;
+                    }
+                }
+            }
+        };
 
         if result.is_ok() {
             self.start_receive_task();
