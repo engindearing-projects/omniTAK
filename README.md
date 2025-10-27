@@ -260,7 +260,7 @@ OmniTAK is designed for tactical battlefield coordination:
 - [TAK Server](https://tak.gov/) - Official Team Awareness Kit server
 - [FreeTAKServer](https://github.com/FreeTAKTeam/FreeTakServer) - Python TAK server
 - [TAKy](https://github.com/tkuester/taky) - Minimal TAK server
-- [GoTAK](https://github.com/kdudkov/goatak) - Go TAK implementation
+- [OpenTAKServer](https://github.com/brian7704/OpenTAKServer) - Flask-based TAK server
 
 ## 📞 Support
 
