@@ -4,7 +4,7 @@
 
 OmniTAK is a high-performance, memory-safe TAK (Team Awareness Kit) server aggregator written in Rust. It acts as a multi-protocol client that connects to multiple TAK servers simultaneously, aggregates CoT (Cursor on Target) messages, and intelligently routes them based on configurable filters.
 
-## 🎯 Features
+## Features
 
 ### Core Capabilities
 - **Multi-Protocol Support**: TCP, UDP, TLS, WebSocket, and UDP Multicast
@@ -17,13 +17,13 @@ OmniTAK is a high-performance, memory-safe TAK (Team Awareness Kit) server aggre
 - **Production Ready**: Comprehensive metrics, health checks, audit logging
 
 ### Performance Targets
-- ✅ **Throughput**: 100,000+ messages/second
-- ✅ **Latency**: <1ms routing latency (p99)
-- ✅ **Connections**: 10,000+ concurrent TAK servers
-- ✅ **Memory**: <50MB per 1,000 connections
-- ✅ **Parsing**: <2μs per CoT message
+- **Throughput**: 100,000+ messages/second
+- **Latency**: <1ms routing latency (p99)
+- **Connections**: 10,000+ concurrent TAK servers
+- **Memory**: <50MB per 1,000 connections
+- **Parsing**: <2μs per CoT message
 
-## 🏗️ Architecture
+## Architecture
 
 OmniTAK is built as a Rust workspace with modular crates:
 
@@ -47,15 +47,15 @@ omnitak/
 - **Metrics**: Prometheus-compatible
 - **Logging**: Tracing with structured logs
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Platform-Specific Setup Guides
 
 **Choose your operating system for detailed installation instructions:**
 
-- 📱 **[macOS Setup Guide](SETUP_MACOS.md)** - Complete setup for macOS (Intel & Apple Silicon)
-- 🐧 **[Ubuntu/Linux Setup Guide](SETUP_UBUNTU.md)** - Complete setup for Ubuntu, Debian, and derivatives
-- 🪟 **[Windows Setup Guide](SETUP_WINDOWS.md)** - Complete setup for Windows 10/11 (Native & WSL2)
+- **[macOS Setup Guide](SETUP_MACOS.md)** - Complete setup for macOS (Intel & Apple Silicon)
+- **[Ubuntu/Linux Setup Guide](SETUP_UBUNTU.md)** - Complete setup for Ubuntu, Debian, and derivatives
+- **[Windows Setup Guide](SETUP_WINDOWS.md)** - Complete setup for Windows 10/11 (Native & WSL2)
 
 Each guide includes:
 - Step-by-step installation of all dependencies
@@ -101,7 +101,7 @@ docker build -t omnitak:latest .
 docker run -p 8443:8443 -v $(pwd)/config.yaml:/app/config.yaml omnitak:latest
 ```
 
-## 📖 Usage
+## Usage
 
 ### Configuration
 
@@ -176,7 +176,7 @@ Connect to `wss://host:port/api/v1/stream` and send:
 }
 ```
 
-## 📊 Monitoring
+## Monitoring
 
 ### Prometheus Metrics
 
@@ -192,7 +192,7 @@ OmniTAK exports Prometheus-compatible metrics on `/api/v1/metrics`:
 - **Liveness**: `GET /health` - Is the service running?
 - **Readiness**: `GET /ready` - Is the service ready to handle requests?
 
-## 🔒 Security
+## Security
 
 ### Authentication
 - **JWT Tokens**: Bearer token authentication with configurable expiration
@@ -208,7 +208,7 @@ OmniTAK exports Prometheus-compatible metrics on `/api/v1/metrics`:
 - **Client Certificates**: Mutual TLS for TAK server connections
 - **Memory-Safe**: Rustls implementation prevents OpenSSL vulnerabilities
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests
@@ -224,7 +224,7 @@ cargo test -p omnitak-cot
 RUST_LOG=debug cargo test
 ```
 
-## 📦 Deployment
+## Deployment
 
 ### Kubernetes
 
@@ -241,14 +241,14 @@ See `k8s/` directory for:
 docker-compose up -d
 ```
 
-## 📚 Documentation
+## Documentation
 
 - [API Documentation](./crates/omnitak-api/README.md)
 - [CoT Parser](./crates/omnitak-cot/README.md)
 - [Filter System](./crates/omnitak-filter/README.md)
 - [Connection Pool](./crates/omnitak-pool/README.md)
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please:
 
@@ -265,7 +265,7 @@ Contributions are welcome! Please:
 - Add tests for new features
 - Update documentation
 
-## 📄 License
+## License
 
 Licensed under either of:
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
@@ -273,7 +273,7 @@ Licensed under either of:
 
 at your option.
 
-## 🎖️ Military Applications
+## Military Applications
 
 OmniTAK is designed for tactical battlefield coordination:
 - **Multi-Domain Operations**: Aggregate feeds from ground, air, and maritime units
@@ -282,33 +282,33 @@ OmniTAK is designed for tactical battlefield coordination:
 - **Denied/Degraded Networks**: Message deduplication and efficient routing
 - **Operational Security**: Memory-safe, audit logging, RBAC
 
-## 🔗 Related Projects
+## Related Projects
 
 - [TAK Server](https://tak.gov/) - Official Team Awareness Kit server
 - [FreeTAKServer](https://github.com/FreeTAKTeam/FreeTakServer) - Python TAK server
 - [TAKy](https://github.com/tkuester/taky) - Minimal TAK server
 - [OpenTAKServer](https://github.com/brian7704/OpenTAKServer) - Flask-based TAK server
 
-## ⚠️ Known Issues
+## Known Issues
 
-### ✅ Compilation Errors (RESOLVED as of 2025-10-27)
+### Compilation Errors (RESOLVED as of 2025-10-27)
 
-All 13 compilation errors have been fixed! The core crates now build successfully.
+All 13 compilation errors have been fixed. The core crates now build successfully.
 
 **What was fixed:**
-- ✅ Borrow checker violations in TCP/TLS clients
-- ✅ UDP socket buffer configuration (implemented via socket2)
-- ✅ Closure capture issues in retry logic
-- ✅ Moved value errors and type mismatches
-- ✅ Debug trait implementation for FilterRule
-- ✅ Send trait issues with lock guards
+- Borrow checker violations in TCP/TLS clients
+- UDP socket buffer configuration (implemented via socket2)
+- Closure capture issues in retry logic
+- Moved value errors and type mismatches
+- Debug trait implementation for FilterRule
+- Send trait issues with lock guards
 
 See [BUILD_FIXES_SUMMARY.md](BUILD_FIXES_SUMMARY.md) for detailed technical information about all fixes.
 
 **Current build status:**
 ```bash
 cargo build --release -p omnitak-client -p omnitak-pool
-# ✅ SUCCESS - All core crates compile
+# SUCCESS - All core crates compile
 ```
 
 ### Remaining Known Issue
@@ -319,11 +319,11 @@ cargo build --release -p omnitak-client -p omnitak-pool
 - Workaround: Build without the API crate as shown in Quick Start
 - Issue is being tracked and will be resolved in future update
 
-## 📞 Support
+## Support
 
 - **Issues**: [GitHub Issues](https://github.com/engindearing-projects/omniTAK/issues)
 - **Documentation**: [Wiki](https://github.com/engindearing-projects/omniTAK/wiki)
 
 ---
 
-**Built with 🦀 Rust for reliability and performance in tactical environments.**
+**Built with Rust for reliability and performance in tactical environments.**
