@@ -1,0 +1,123 @@
+# Example OmniTAK Configuration File
+# This file demonstrates all available configuration options
+
+# Application-wide settings
+app:
+  name: omnitak
+  version: 0.1.0
+  environment: production  # development, staging, production
+  worker_threads: 0  # 0 = use number of CPUs
+  max_connections: 1000
+  shutdown_timeout_secs: 30
+
+# TAK Server connections
+servers:
+  # TCP connection example
+  - name: tak-server-tcp
+    host: 192.168.1.100
+    port: 8087
+    protocol: tcp
+    enabled: true
+    connect_timeout_secs: 10
+    read_timeout_secs: 30
+    tags:
+      - production
+      - east-coast
+    reconnect:
+      auto_reconnect: true
+      initial_delay_secs: 1
+      max_delay_secs: 300
+      backoff_multiplier: 2.0
+      max_attempts: null  # null = infinite
+
+  # TLS connection example
+  - name: tak-server-tls
+    host: secure.tak.mil
+    port: 8089
+    protocol: tls
+    enabled: true
+    tls:
+      ca_cert_path: /etc/omnitak/certs/ca.pem
+      client_cert_path: /etc/omnitak/certs/client.pem
+      client_key_path: /etc/omnitak/certs/client-key.pem
+      verify_cert: true
+      server_name: secure.tak.mil
+    connect_timeout_secs: 10
+    read_timeout_secs: 30
+    tags:
+      - production
+      - secure
+
+  # WebSocket connection example
+  - name: tak-server-ws
+    host: ws.tak.mil
+    port: 8443
+    protocol: websocket
+    enabled: false
+    connect_timeout_secs: 10
+    read_timeout_secs: 30
+    tags:
+      - staging
+
+# Message filtering configuration
+filters:
+  enabled: true
+  mode: blacklist  # whitelist or blacklist
+  default_action: accept  # accept, reject, modify
+  rules:
+    - name: block-test-messages
+      description: Block messages with test UIDs
+      enabled: true
+      field: uid
+      operator: starts_with  # equals, not_equals, contains, not_contains, regex, starts_with, ends_with
+      value: "TEST-"
+      action: reject
+
+    - name: filter-by-type
+      description: Only allow specific CoT types
+      enabled: true
+      field: type
+      operator: regex
+      value: "^a-[fh]-.*"
+      action: accept
+
+# Logging configuration
+logging:
+  level: info  # trace, debug, info, warn, error
+  format: json  # text or json
+  stdout: true
+  file: /var/log/omnitak/omnitak.log  # optional
+  timestamps: true
+  file_line: false
+  module_levels:
+    omnitak_core: debug
+    omnitak_client: info
+    omnitak_filter: warn
+
+# REST API configuration
+api:
+  enabled: true
+  host: 0.0.0.0
+  port: 8080
+  cors: true
+  max_body_size: 1048576  # 1MB in bytes
+  request_timeout_secs: 30
+  # Optional TLS configuration for HTTPS
+  # tls:
+  #   ca_cert_path: /etc/omnitak/api-certs/ca.pem
+  #   client_cert_path: /etc/omnitak/api-certs/server.pem
+  #   client_key_path: /etc/omnitak/api-certs/server-key.pem
+  #   verify_cert: true
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  path: /metrics
+  interval_secs: 60
+
+# Data storage configuration
+storage:
+  backend: memory  # memory, file, sqlite, postgres
+  data_dir: ./data
+  retention_secs: 0  # 0 = unlimited
+  max_size_bytes: 0  # 0 = unlimited

@@ -1,0 +1,40 @@
+# Rust
+/target
+**/*.rs.bk
+*.pdb
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Logs
+*.log
+logs/
+
+# Config (except examples)
+config.yaml
+config.yml
+!*.example.yaml
+!*.example.yml
+
+# Build artifacts
+dist/
+build/

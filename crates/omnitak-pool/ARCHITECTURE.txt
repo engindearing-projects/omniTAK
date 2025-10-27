@@ -1,0 +1,425 @@
+OMNICOT CONNECTION POOL - ARCHITECTURE DIAGRAM
+==============================================
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         EXTERNAL CLIENTS & TAK SERVERS                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐               ┌──────────┐           │
+│  │ Client 1 │  │ Client 2 │  │ Client N │     ...       │ TAK Srv  │           │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘               └────┬─────┘           │
+└───────┼─────────────┼─────────────┼──────────────────────────┼─────────────────┘
+        │             │             │                          │
+        │ Inbound     │             │                          │ Bidirectional
+        │ Messages    │             │                          │ TAK Protocol
+        ▼             ▼             ▼                          ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              MESSAGE AGGREGATOR                                 │
+│                                (aggregator.rs)                                  │
+│  ┌───────────────────────────────────────────────────────────────────────────┐ │
+│  │                         Deduplication Engine                              │ │
+│  │  ┌─────────────────────────────────────────────────────────────────────┐ │ │
+│  │  │  DashMap<MessageUID, DeduplicationEntry>                            │ │ │
+│  │  │                                                                       │ │ │
+│  │  │  Entry {                                                              │ │ │
+│  │  │    uid: String,                    Time Window: 60 seconds           │ │ │
+│  │  │    first_seen: Instant,            Max Entries: 100,000              │ │ │
+│  │  │    sources: Vec<ConnectionId>,     Eviction: LRU                     │ │ │
+│  │  │    hash: u64                                                          │ │ │
+│  │  │  }                                                                    │ │ │
+│  │  └─────────────────────────────────────────────────────────────────────┘ │ │
+│  │                                                                             │ │
+│  │  Worker Pool (4 tasks)              Cleanup Task                           │ │
+│  │  ├─ Worker 1: Extract UID, check    ├─ Every 10s                          │ │
+│  │  ├─ Worker 2: cache, forward        └─ Remove expired                     │ │
+│  │  ├─ Worker 3: unique messages           entries                           │ │
+│  │  └─ Worker 4:                                                              │ │
+│  └───────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────┬───────────────────────────────────────────────┘
+                                  │
+                                  │ Unique Messages Only
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            MESSAGE DISTRIBUTOR                                  │
+│                              (distributor.rs)                                   │
+│  ┌───────────────────────────────────────────────────────────────────────────┐ │
+│  │                           Filter Engine                                   │ │
+│  │  HashMap<ConnectionId, Vec<FilterRule>>                                   │ │
+│  │                                                                             │ │
+│  │  FilterRule::ByType        → Check XML type attribute                     │ │
+│  │  FilterRule::ByCallsign    → Check callsign in message                    │ │
+│  │  FilterRule::ByGeoBounds   → Check lat/lon within radius                  │ │
+│  │  FilterRule::Custom        → User-defined function                         │ │
+│  │  FilterRule::AlwaysSend    → Send to all                                  │ │
+│  │  FilterRule::NeverSend     → Blacklist                                    │ │
+│  └───────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                 │
+│  ┌───────────────────────────────────────────────────────────────────────────┐ │
+│  │                       Distribution Workers (16 tasks)                     │ │
+│  │                                                                             │ │
+│  │  For each batch of messages:                                               │ │
+│  │    1. Get active connections                                               │ │
+│  │    2. Apply filters to each connection                                     │ │
+│  │    3. Send to matching connections                                         │ │
+│  │    4. Handle backpressure:                                                 │ │
+│  │       - DropOnFull: try_send(), drop if full                               │ │
+│  │       - BlockOnFull: send_async(), wait for space                          │ │
+│  │       - TryForTimeout: try for N ms, then drop                             │ │
+│  │                                                                             │ │
+│  │  Batch Size: 100 messages                                                  │ │
+│  │  Flush Interval: 10ms                                                      │ │
+│  └───────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────┬───────────────────────────────────────────────┘
+                                  │
+                                  │ Filtered Messages
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          CONNECTION POOL MANAGER                                │
+│                                 (pool.rs)                                       │
+│  ┌───────────────────────────────────────────────────────────────────────────┐ │
+│  │  DashMap<ConnectionId, Arc<Connection>>                                   │ │
+│  │                                                                             │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │ │
+│  │  │ Connection 1 │  │ Connection 2 │  │ Connection 3 │  │Connection... │  │ │
+│  │  ├──────────────┤  ├──────────────┤  ├──────────────┤  ├──────────────┤  │ │
+│  │  │ ID: "srv-1"  │  │ ID: "srv-2"  │  │ ID: "srv-3"  │  │ ID: "srv-N"  │  │ │
+│  │  │ Priority: 10 │  │ Priority: 5  │  │ Priority: 3  │  │ Priority: 1  │  │ │
+│  │  │              │  │              │  │              │  │              │  │ │
+│  │  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │  │ │
+│  │  │ │Inbound TX│ │  │ │Inbound TX│ │  │ │Inbound TX│ │  │ │Inbound TX│ │  │ │
+│  │  │ │ (1000)   │ │  │ │ (1000)   │ │  │ │ (1000)   │ │  │ │ (1000)   │ │  │ │
+│  │  │ └────┬─────┘ │  │ └────┬─────┘ │  │ └────┬─────┘ │  │ └────┬─────┘ │  │ │
+│  │  │      │       │  │      │       │  │      │       │  │      │       │  │ │
+│  │  │ ┌────▼─────┐ │  │ ┌────▼─────┐ │  │ ┌────▼─────┐ │  │ ┌────▼─────┐ │  │ │
+│  │  │ │ Tokio    │ │  │ │ Tokio    │ │  │ │ Tokio    │ │  │ │ Tokio    │ │  │ │
+│  │  │ │  Task    │ │  │ │  Task    │ │  │ │  Task    │ │  │ │  Task    │ │  │ │
+│  │  │ │          │ │  │ │          │ │  │ │          │ │  │ │          │ │  │ │
+│  │  │ │ Loop:    │ │  │ │ Loop:    │ │  │ │ Loop:    │ │  │ │ Loop:    │ │  │ │
+│  │  │ │ - recv() │ │  │ │ - recv() │ │  │ │ - recv() │ │  │ │ - recv() │ │  │ │
+│  │  │ │ - process│ │  │ │ - process│ │  │ │ - process│ │  │ │ - process│ │  │ │
+│  │  │ │ - forward│ │  │ │ - forward│ │  │ │ - forward│ │  │ │ - forward│ │  │ │
+│  │  │ └────┬─────┘ │  │ └────┬─────┘ │  │ └────┬─────┘ │  │ └────┬─────┘ │  │ │
+│  │  │      │       │  │      │       │  │      │       │  │      │       │  │ │
+│  │  │ ┌────▼─────┐ │  │ ┌────▼─────┐ │  │ ┌────▼─────┐ │  │ ┌────▼─────┐ │  │ │
+│  │  │ │Outbound  │ │  │ │Outbound  │ │  │ │Outbound  │ │  │ │Outbound  │ │  │ │
+│  │  │ │RX (1000) │ │  │ │RX (1000) │ │  │ │RX (1000) │ │  │ │RX (1000) │ │  │ │
+│  │  │ └────┬─────┘ │  │ └────┬─────┘ │  │ └────┬─────┘ │  │ └────┬─────┘ │  │ │
+│  │  │      │       │  │      │       │  │      │       │  │      │       │  │ │
+│  │  │ ┌────▼─────┐ │  │ ┌────▼─────┐ │  │ ┌────▼─────┐ │  │ ┌────▼─────┐ │  │ │
+│  │  │ │  State   │ │  │ │  State   │ │  │ │  State   │ │  │ │  State   │ │  │ │
+│  │  │ │ (Atomic) │ │  │ │ (Atomic) │ │  │ │ (Atomic) │ │  │ │ (Atomic) │ │  │ │
+│  │  │ │ - active │ │  │ │ - active │ │  │ │ - active │ │  │ │ - active │ │  │ │
+│  │  │ │ - msgs   │ │  │ │ - msgs   │ │  │ │ - msgs   │ │  │ │ - msgs   │ │  │ │
+│  │  │ │ - errors │ │  │ │ - errors │ │  │ │ - errors │ │  │ │ - errors │ │  │ │
+│  │  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │  │ │
+│  │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  │ │
+│  │         │                 │                 │                 │           │ │
+│  └─────────┼─────────────────┼─────────────────┼─────────────────┼───────────┘ │
+│            │                 │                 │                 │             │
+└────────────┼─────────────────┼─────────────────┼─────────────────┼─────────────┘
+             │                 │                 │                 │
+             ▼                 ▼                 ▼                 ▼
+  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐
+  │  TAK Server 1   │  │  TAK Server 2   │  │  TAK Server 3   │  │TAK Server N  │
+  │  192.168.1.100  │  │  192.168.1.101  │  │  192.168.1.102  │  │192.168.1.N   │
+  │  :8087          │  │  :8087          │  │  :8087          │  │:8087         │
+  └─────────────────┘  └─────────────────┘  └─────────────────┘  └──────────────┘
+
+
+SUPPORTING SYSTEMS
+==================
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            HEALTH MONITOR                                       │
+│                              (health.rs)                                        │
+│                                                                                 │
+│  ┌───────────────────────────────────────────────────────────────────────────┐ │
+│  │                      Circuit Breaker per Connection                       │ │
+│  │                                                                             │ │
+│  │  HashMap<ConnectionId, CircuitBreaker>                                     │ │
+│  │                                                                             │ │
+│  │  Circuit States:                                                            │ │
+│  │    CLOSED ────[5 failures]────► OPEN ────[60s timeout]────► HALF-OPEN     │ │
+│  │       ▲                           │                              │         │ │
+│  │       │                           └─[fail fast, no health check]─┘         │ │
+│  │       │                                                          │         │ │
+│  │       └──────────────[2 successes]──────────────────────────────┘         │ │
+│  │                                                                             │ │
+│  │  Health Check Loop (every 30s):                                            │ │
+│  │    for each connection:                                                    │ │
+│  │      if circuit.allows_request():                                          │ │
+│  │        send PING                                                            │ │
+│  │        await response (5s timeout)                                         │ │
+│  │        if success: circuit.record_success()                                │ │
+│  │        if failure: circuit.record_failure()                                │ │
+│  │                    if auto_reconnect: trigger_reconnect()                  │ │
+│  └───────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         CONCURRENCY CONTROL                                     │
+│                           (concurrency.rs)                                      │
+│                                                                                 │
+│  ┌───────────────────────────────────────────────────────────────────────────┐ │
+│  │                    Connection Semaphore (10,000 permits)                  │ │
+│  │                                                                             │ │
+│  │  Available: ████████████░░░░░░░░ (5,234 / 10,000)                         │ │
+│  │                                                                             │ │
+│  │  Each connection acquires 1 permit                                         │ │
+│  │  Permit released when connection drops                                     │ │
+│  └───────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                 │
+│  ┌───────────────────────────────────────────────────────────────────────────┐ │
+│  │              Priority Queue (BinaryHeap, max 1,000 pending)               │ │
+│  │                                                                             │ │
+│  │  Ordering: Priority DESC, then Timestamp ASC                               │ │
+│  │                                                                             │ │
+│  │  Queue:                                                                     │ │
+│  │    [Priority 10] Request{id: "critical-1",  requested: 2s ago}             │ │
+│  │    [Priority 10] Request{id: "critical-2",  requested: 5s ago}             │ │
+│  │    [Priority 5]  Request{id: "normal-1",    requested: 1s ago}             │ │
+│  │    [Priority 1]  Request{id: "low-prio-1",  requested: 10s ago}            │ │
+│  │                                                                             │ │
+│  │  Dequeue: Always returns highest priority, oldest within priority          │ │
+│  │  Timeout: Requests older than 30s are dropped                              │ │
+│  └───────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                 │
+│  ┌───────────────────────────────────────────────────────────────────────────┐ │
+│  │                    Rate Limiter (1,000 ops/sec)                           │ │
+│  │                                                                             │ │
+│  │  Semaphore: 1,000 permits                                                  │ │
+│  │  Refill: Every 1 second, add permits back to 1,000                         │ │
+│  │                                                                             │ │
+│  │  Timeline:                                                                  │ │
+│  │  0.0s: 1000 permits available                                              │ │
+│  │  0.1s:  900 permits (100 ops consumed)                                     │ │
+│  │  0.5s:  500 permits (500 ops consumed)                                     │ │
+│  │  1.0s: 1000 permits (refill!)                                              │ │
+│  └───────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           METRICS REGISTRY                                      │
+│                             (metrics.rs)                                        │
+│                                                                                 │
+│  ┌───────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Prometheus Exporter                                │ │
+│  │                        HTTP Server: 0.0.0.0:9090                          │ │
+│  │                                                                             │ │
+│  │  Counters (AtomicU64):                                                     │ │
+│  │    pool_messages_sent_total:          1,234,567                            │ │
+│  │    pool_messages_received_total:      1,200,000                            │ │
+│  │    distributor_messages_dropped:          5,432                            │ │
+│  │    aggregator_duplicates:                34,567                            │ │
+│  │                                                                             │ │
+│  │  Gauges:                                                                    │ │
+│  │    pool_connections_active:                1,234                           │ │
+│  │    pool_connections_total:                 1,250                           │ │
+│  │    aggregator_dedup_ratio:                  0.23                           │ │
+│  │                                                                             │ │
+│  │  Histograms:                                                                │ │
+│  │    distributor_latency_seconds:                                            │ │
+│  │      p50:  0.0005s                                                          │ │
+│  │      p95:  0.0008s                                                          │ │
+│  │      p99:  0.0010s                                                          │ │
+│  │                                                                             │ │
+│  │    distributor_batch_size:                                                 │ │
+│  │      p50:  95 messages                                                      │ │
+│  │      p95:  100 messages                                                     │ │
+│  │      p99:  100 messages                                                     │ │
+│  └───────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                 │
+│  Scrape endpoint: GET http://localhost:9090/metrics                            │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+
+DATA STRUCTURES
+===============
+
+Connection State (per connection):
+  struct ConnectionState {
+    active: AtomicBool,           // 1 byte
+    last_message: AtomicU64,      // 8 bytes (epoch millis)
+    messages_sent: AtomicU64,     // 8 bytes
+    messages_received: AtomicU64, // 8 bytes
+    errors: AtomicU64,            // 8 bytes
+    last_error: RwLock<Option<String>>, // ~24 bytes
+  }
+  Total: ~60 bytes
+
+Connection (Arc'd):
+  struct Connection {
+    id: String,                   // ~24 bytes
+    name: String,                 // ~24 bytes
+    address: String,              // ~24 bytes
+    priority: u8,                 // 1 byte
+    tx: Sender<PoolMessage>,      // ~16 bytes + channel capacity
+    rx: Receiver<PoolMessage>,    // ~16 bytes + channel capacity
+    task: JoinHandle<()>,         // ~8 bytes
+    state: Arc<ConnectionState>,  // 8 bytes (ptr) + 60 bytes
+    created_at: Instant,          // 16 bytes
+  }
+  Total: ~200 bytes + 2 * 1000 * 24 bytes (channels) = ~48KB
+
+DashMap (lock-free):
+  - Sharded HashMap with RwLocks per shard
+  - Lock-free reads when no writes to same shard
+  - Default: 16 shards
+  - O(1) lookup, insert, remove
+
+
+PERFORMANCE OPTIMIZATIONS
+==========================
+
+1. Lock-Free Reads:
+   - DashMap for connection pool (sharded locks)
+   - Atomic counters for metrics (no locks)
+   - Arc for read-only shared data
+
+2. Batch Processing:
+   - Distributor: 100 messages per batch
+   - Aggregator: Process in batches
+   - Reduces per-message overhead
+
+3. Worker Pools:
+   - Distributor: 16 workers (parallel distribution)
+   - Aggregator: 4 workers (parallel dedup)
+   - Scales with CPU cores
+
+4. Bounded Channels:
+   - Flume MPMC (faster than tokio mpsc)
+   - Backpressure via bounded capacity
+   - Try-send for non-blocking
+
+5. Zero-Copy Where Possible:
+   - Arc<Connection> instead of clone
+   - Vec<u8> for messages (no parsing unless needed)
+   - Atomic increments (no allocations)
+
+6. Memory Pool (implicit):
+   - Channel pre-allocation
+   - Fixed-size structs
+   - No dynamic resizing in hot path
+
+
+FAILURE MODES & RECOVERY
+=========================
+
+Scenario 1: Connection Drops
+  ┌─────────────────────────────────────────────────┐
+  │ TAK Server becomes unreachable                  │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ Connection task detects error                   │
+  │ - Record error in ConnectionState               │
+  │ - Channel recv/send fails                       │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ Health Monitor detects failure                  │
+  │ - Circuit breaker increments failure count      │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ After 5 failures: Circuit opens                 │
+  │ - No more health checks (fail fast)             │
+  │ - Auto-reconnect triggered (if enabled)         │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ After 60s: Circuit half-opens                   │
+  │ - Test recovery with health check               │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+        ┌───────────┴────────────┐
+        │                        │
+   Success                   Failure
+        │                        │
+        ▼                        ▼
+  Circuit closes          Circuit re-opens
+  Normal operation        Wait another 60s
+
+Scenario 2: Slow Consumer
+  ┌─────────────────────────────────────────────────┐
+  │ Connection's inbound channel fills up           │
+  │ - 1000/1000 messages in queue                   │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ Distributor attempts to send                    │
+  │ - Strategy: DropOnFull                          │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ tx.try_send() returns Err(Full)                 │
+  │ - Message is dropped                            │
+  │ - Metric: distributor_messages_dropped++        │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ Alert triggers (drop rate > 1%)                 │
+  │ Action: Investigate connection, increase        │
+  │         channel capacity, or remove connection  │
+  └─────────────────────────────────────────────────┘
+
+Scenario 3: Memory Pressure
+  ┌─────────────────────────────────────────────────┐
+  │ Deduplication cache reaches 100K entries        │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ LRU eviction kicks in                           │
+  │ - Remove oldest entries from queue              │
+  │ - Free up space for new entries                 │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ Periodic cleanup (every 10s)                    │
+  │ - Remove expired entries (>60s old)             │
+  │ - Metric: cache_cleanup_entries                 │
+  └─────────────────────────────────────────────────┘
+
+Scenario 4: Graceful Shutdown
+  ┌─────────────────────────────────────────────────┐
+  │ Shutdown signal received (Ctrl+C)               │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ 1. Stop health monitor                          │
+  │ 2. Stop aggregator (drain queue)                │
+  │ 3. Stop distributor (drain queue)               │
+  │ 4. Stop concurrency limiter                     │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ 5. Shutdown connection pool                     │
+  │    - Send PoolMessage::Shutdown to all          │
+  │    - Wait for tasks to complete (5s timeout)    │
+  │    - Close all channels                         │
+  └─────────────────┬───────────────────────────────┘
+                    ▼
+  ┌─────────────────────────────────────────────────┐
+  │ 6. Print final statistics                       │
+  │ 7. Exit cleanly                                 │
+  └─────────────────────────────────────────────────┘
+
+
+MEMORY LAYOUT (10,000 connections)
+===================================
+
+Base Overhead:
+  - Connection Pool:        10 MB
+  - DashMap (16 shards):     2 MB
+  - Metrics Registry:        1 MB
+  - Health Monitor:          5 MB (circuit breakers)
+  - Distributor:            10 MB (workers, filters)
+  - Aggregator:             50 MB (dedup cache)
+  Total Base:               78 MB
+
+Per Connection (x10,000):
+  - Connection struct:       2 MB (200 bytes x 10K)
+  - Channels (2x1000):     480 MB (48KB x 10K)
+  - Task overhead:          20 MB (2KB x 10K)
+  Total Connections:       502 MB
+
+Grand Total: ~580 MB for 10,000 connections
+

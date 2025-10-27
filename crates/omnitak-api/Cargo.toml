@@ -1,0 +1,64 @@
+[package]
+name = "omnitak-api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Core dependencies
+omnitak-core = { path = "../omnitak-core" }
+omnitak-pool = { path = "../omnitak-pool" }
+omnitak-filter = { path = "../omnitak-filter" }
+omnitak-cot = { path = "../omnitak-cot" }
+
+# Axum web framework
+axum = { version = "0.7", features = ["ws", "macros"] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
+tower = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "cors", "compression-gzip", "limit"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+futures = "0.3"
+futures-util = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Validation
+validator = { version = "0.18", features = ["derive"] }
+
+# Authentication
+jsonwebtoken = "9.3"
+argon2 = "0.5"
+rand = "0.8"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Metrics
+metrics = "0.23"
+metrics-exporter-prometheus = "0.15"
+
+# OpenAPI documentation
+utoipa = { version = "4.2", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "7.1", features = ["axum"] }
+
+# Security
+rustls = "0.23"
+tokio-rustls = "0.26"
+
+# Static file embedding
+rust-embed = { version = "8.5", features = ["compression"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Utilities
+uuid = { version = "1.10", features = ["serde", "v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+dashmap = "6.1"
+governor = "0.7"

@@ -1,0 +1,61 @@
+# Unicast routing configuration
+#
+# Uses "first_match" strategy - each message goes to only one destination
+# Routes are evaluated in priority order, stopping at first match
+
+strategy: first_match
+
+# Fallback for unmatched messages
+default_destination: default-server
+
+routes:
+  # Highest priority: VIP units
+  - id: vip
+    description: VIP units to secure server
+    priority: 100
+    enabled: true
+    filter:
+      type: group
+      pattern: "^VIP.*"
+    destinations:
+      - vip-secure-server
+
+  # High priority: Hostile contacts
+  - id: hostile
+    description: All hostile contacts to threat tracking
+    priority: 90
+    enabled: true
+    filter:
+      type: affiliation
+      allow:
+        - hostile
+        - suspect
+    destinations:
+      - threat-tracking-server
+
+  # Medium priority: Friendly forces
+  - id: friendly
+    description: Friendly forces to blue force tracker
+    priority: 80
+    enabled: true
+    filter:
+      type: affiliation
+      allow:
+        - friend
+        - assumedfriend
+    destinations:
+      - blue-force-tracker
+
+  # Lower priority: Everything else
+  - id: catchall
+    description: All other units
+    priority: 10
+    enabled: true
+    filter:
+      type: affiliation
+      allow:
+        - pending
+        - unknown
+        - neutral
+    destinations:
+      - general-server

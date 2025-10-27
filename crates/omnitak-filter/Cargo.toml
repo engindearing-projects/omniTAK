@@ -1,0 +1,40 @@
+[package]
+name = "omnitak-filter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+omnitak-core = { path = "../omnitak-core" }
+omnitak-cot = { path = "../omnitak-cot" }
+
+# Serialization
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+
+# Regex for pattern matching
+regex = { workspace = true }
+
+# Lock-free concurrent data structures
+dashmap = { workspace = true }
+parking_lot = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Metrics
+metrics = { workspace = true }
+
+# Time handling
+chrono = { workspace = true }
+
+# For fast string ops
+memchr = "2.7"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+criterion = "0.5"
+tempfile = "3.13"

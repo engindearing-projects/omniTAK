@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package omnitak.cot;
+
+// CoT Event message in Protocol Buffer format
+message CotEvent {
+    // CoT version (typically "2.0")
+    string version = 1;
+
+    // Unique identifier for this event
+    string uid = 2;
+
+    // CoT type (e.g., "a-f-G" for atom-friendly-ground)
+    string type = 3;
+
+    // Event timestamp in RFC3339 format
+    string time = 4;
+
+    // Event start time in RFC3339 format
+    string start = 5;
+
+    // Event stale time in RFC3339 format
+    string stale = 6;
+
+    // How the event was generated
+    string how = 7;
+
+    // Geographic location
+    Point point = 8;
+
+    // Optional detail fields (simplified as key-value pairs)
+    map<string, string> detail = 9;
+}
+
+// Geographic point with accuracy
+message Point {
+    // Latitude in decimal degrees (-90 to 90)
+    double lat = 1;
+
+    // Longitude in decimal degrees (-180 to 180)
+    double lon = 2;
+
+    // Height above ellipsoid in meters
+    double hae = 3;
+
+    // Circular error in meters (95% confidence)
+    double ce = 4;
+
+    // Linear error in meters (95% confidence)
+    double le = 5;
+}

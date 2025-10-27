@@ -1,0 +1,123 @@
+# Example routing configuration for omnitak-filter
+#
+# This configuration demonstrates various filtering and routing scenarios
+# for Cursor-on-Target (CoT) messages.
+
+# Routing strategy:
+#   - "all" or "multicast": Evaluate all routes (message can go to multiple destinations)
+#   - "first_match" or "unicast": Stop at first matching route (single destination)
+strategy: all
+
+# Default destination for messages that don't match any route
+default_destination: default-server
+
+# List of routing rules (evaluated in priority order)
+routes:
+  # High priority: Route friendly ground forces to blue team server
+  - id: friendly-ground
+    description: Route friendly ground forces to blue team server
+    priority: 100
+    enabled: true
+    filter:
+      type: affiliation
+      allow:
+        - friend
+        - assumedfriend
+    destinations:
+      - blue-ground-server
+
+  # High priority: Route hostile air contacts to air defense
+  - id: hostile-air
+    description: Route hostile air contacts to air defense coordination
+    priority: 95
+    enabled: true
+    filter:
+      type: dimension
+      allow:
+        - air
+    destinations:
+      - air-defense-server
+      - tactical-air-control
+
+  # Medium priority: Route Team Alpha to dedicated server
+  - id: team-alpha
+    description: Route all Team Alpha units to their dedicated server
+    priority: 80
+    enabled: true
+    filter:
+      type: team
+      teams:
+        - Alpha
+        - Alpha-1
+        - Alpha-2
+    destinations:
+      - team-alpha-server
+
+  # Medium priority: Route by group name (regex pattern)
+  - id: special-ops
+    description: Route special operations units
+    priority: 75
+    enabled: true
+    filter:
+      type: group
+      pattern: "^(SOF|JSOC|SEAL).*"
+    destinations:
+      - socom-server
+      - jsoc-toc
+
+  # Lower priority: Geographic routing - Northeast AOR
+  - id: aor-northeast
+    description: Route units in northeast area of responsibility
+    priority: 50
+    enabled: true
+    filter:
+      type: geoboundingbox
+      min_lat: 40.0
+      max_lat: 45.0
+      min_lon: -75.0
+      max_lon: -70.0
+    destinations:
+      - northeast-regional-server
+
+  # Lower priority: Geographic routing - Southeast AOR
+  - id: aor-southeast
+    description: Route units in southeast area of responsibility
+    priority: 50
+    enabled: true
+    filter:
+      type: geoboundingbox
+      min_lat: 30.0
+      max_lat: 35.0
+      min_lon: -90.0
+      max_lon: -75.0
+    destinations:
+      - southeast-regional-server
+
+  # VIP tracking
+  - id: vip-tracking
+    description: Route specific VIP units to secure tracking server
+    priority: 90
+    enabled: true
+    filter:
+      type: uid
+      uids:
+        - VIP-POTUS
+        - VIP-SECDEF
+        - VIP-CJCS
+    destinations:
+      - secure-vip-tracker
+      - command-center
+
+  # Neutral forces routing
+  - id: neutral-forces
+    description: Route neutral/unknown forces to intelligence server
+    priority: 60
+    enabled: true
+    filter:
+      type: affiliation
+      allow:
+        - neutral
+        - unknown
+    destinations:
+      - intelligence-server
+      - fusion-center
