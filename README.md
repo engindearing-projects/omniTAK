@@ -291,33 +291,6 @@ OmniTAK is designed for tactical battlefield coordination:
 
 ## Known Issues
 
-### Compilation Errors (RESOLVED as of 2025-10-27)
-
-All 13 compilation errors have been fixed. The core crates now build successfully.
-
-**What was fixed:**
-- Borrow checker violations in TCP/TLS clients
-- UDP socket buffer configuration (implemented via socket2)
-- Closure capture issues in retry logic
-- Moved value errors and type mismatches
-- Debug trait implementation for FilterRule
-- Send trait issues with lock guards
-
-See [BUILD_FIXES_SUMMARY.md](BUILD_FIXES_SUMMARY.md) for detailed technical information about all fixes.
-
-**Current build status:**
-```bash
-cargo build --release -p omnitak-client -p omnitak-pool
-# SUCCESS - All core crates compile
-```
-
-### Remaining Known Issue
-
-**API Crate Dependency Issue**
-- The `omnitak-api` crate has a third-party dependency issue with `utoipa-swagger-ui`
-- This does not affect core functionality (client, pool, filter, etc.)
-- Workaround: Build without the API crate as shown in Quick Start
-- Issue is being tracked and will be resolved in future update
 
 ## Support
 
