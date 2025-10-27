@@ -1,13 +1,13 @@
 # OmniTAK Build Fixes Summary
 **Date:** October 27, 2025
-**Status:** ✅ Core crates building successfully
+**Status:**  Core crates building successfully
 
 ## Overview
 Successfully fixed all compilation errors in the OmniTAK codebase. The core functionality (`omnitak-client`, `omnitak-pool`, `omnitak-core`, `omnitak-cot`, `omnitak-filter`, `omnitak-cert`) now builds without errors.
 
 ## Fixes Applied
 
-### 1. Fixed Borrow Checker Violations (tcp.rs) ✅
+### 1. Fixed Borrow Checker Violations (tcp.rs) 
 **Files:** `crates/omnitak-client/src/tcp.rs`
 
 **Problem:** Multiple mutable borrows - `read_frame` method was borrowing `self.stream` and then trying to call methods on `self`.
@@ -36,7 +36,7 @@ async fn read_newline_frame(&mut self, buffer: &mut BytesMut) -> Result<Option<b
 }
 ```
 
-### 2. Fixed Missing UDP Socket Method (udp.rs) ✅
+### 2. Fixed Missing UDP Socket Method (udp.rs) 
 **Files:** `crates/omnitak-client/src/udp.rs`
 
 **Problem:** `tokio::net::UdpSocket` doesn't have a `set_recv_buffer_size` method.
@@ -60,7 +60,7 @@ socket2.bind(&local_addr.into())?;
 let socket: UdpSocket = UdpSocket::from_std(socket2.into())?;
 ```
 
-### 3. Fixed Closure Capture Issues (tcp.rs, tls.rs, websocket.rs) ✅
+### 3. Fixed Closure Capture Issues (tcp.rs, tls.rs, websocket.rs) 
 **Files:**
 - `crates/omnitak-client/src/tcp.rs:397`
 - `crates/omnitak-client/src/tls.rs:423`
@@ -104,7 +104,7 @@ async fn connect(&mut self) -> Result<()> {
 }
 ```
 
-### 4. Cleaned Up Unused Imports ✅
+### 4. Cleaned Up Unused Imports 
 **Files:**
 - `crates/omnitak-client/src/client.rs`
 - `crates/omnitak-client/src/tls.rs`
@@ -117,7 +117,7 @@ async fn connect(&mut self) -> Result<()> {
 - Removed unused `Buf` from bytes imports
 - Removed unused variable `request` in websocket.rs
 
-### 5. Fixed Moved Value Error (aggregator.rs) ✅
+### 5. Fixed Moved Value Error (aggregator.rs) 
 **Files:** `crates/omnitak-pool/src/aggregator.rs:316,333`
 
 **Problem:** `msg.source` was moved in line 316 but used again in line 333.
@@ -140,7 +140,7 @@ let dist_msg = DistributionMessage {
 };
 ```
 
-### 6. Fixed Type Mismatch (distributor.rs) ✅
+### 6. Fixed Type Mismatch (distributor.rs) 
 **Files:** `crates/omnitak-pool/src/distributor.rs:302-319`
 
 **Problem:** `try_send` returns `Result<(), TrySendError<T>>` while `send_async` returns `Result<(), SendError<T>>` - incompatible types in match arms.
@@ -169,7 +169,7 @@ let send_result: Result<(), String> = match config.strategy {
 };
 ```
 
-### 7. Fixed Arc Borrow Error (pool.rs) ✅
+### 7. Fixed Arc Borrow Error (pool.rs) 
 **Files:** `crates/omnitak-pool/src/pool.rs:321`
 
 **Problem:** Cannot borrow mutable reference through `Arc<Connection>` to await on `task`.
@@ -199,7 +199,7 @@ match Arc::try_unwrap(connection) {
 }
 ```
 
-### 8. Fixed Debug Trait Issue (distributor.rs) ✅
+### 8. Fixed Debug Trait Issue (distributor.rs) 
 **Files:** `crates/omnitak-pool/src/distributor.rs:19`
 
 **Problem:** `FilterRule` enum derives `Debug` but contains `Custom(Arc<dyn Fn...>)` which doesn't implement Debug.
@@ -230,7 +230,7 @@ impl std::fmt::Debug for FilterRule {
 }
 ```
 
-### 9. Fixed Send Trait Issues (health.rs, distributor.rs) ✅
+### 9. Fixed Send Trait Issues (health.rs, distributor.rs) 
 **Files:**
 - `crates/omnitak-pool/src/health.rs:250,280`
 - `crates/omnitak-pool/src/distributor.rs:292,326`
@@ -261,7 +261,7 @@ Self::perform_health_check(...).await; // OK
 
 ## Build Status
 
-### ✅ Successfully Building
+###  Successfully Building
 - `omnitak-core` - Core types and configuration
 - `omnitak-cot` - CoT message parsing
 - `omnitak-client` - Protocol clients (TCP/UDP/TLS/WebSocket)
@@ -269,7 +269,7 @@ Self::perform_health_check(...).await; // OK
 - `omnitak-pool` - Connection pool management
 - `omnitak-cert` - Certificate management
 
-### ⚠️ Known Issue
+###  Known Issue
 - `omnitak-api` - Has a dependency issue with `utoipa-swagger-ui` v7.1.0
   - Error: `folder` must be a relative path under `compression` feature
   - This is a third-party dependency build script issue, not a code error
@@ -296,7 +296,7 @@ $ cargo build --release -p omnitak-client -p omnitak-pool
     Finished `release` profile [optimized] target(s) in 16.95s
 ```
 
-**Result:** ✅ **SUCCESS** - All core crates compile without errors
+**Result:**  **SUCCESS** - All core crates compile without errors
 
 ## Remaining Warnings
 
@@ -323,7 +323,7 @@ Created `INSTALLATION_REPORT.md` documenting the installation attempt and all is
 - 6 errors in `omnitak-pool`
 - 1 API dependency issue (third-party)
 
-**Build Status:** ✅ **WORKING** (core functionality)
+**Build Status:**  **WORKING** (core functionality)
 
 The OmniTAK project core is now buildable and the code compilation errors have been completely resolved. The remaining issue is a third-party dependency problem in the API crate which would need to be addressed by either:
 1. Updating/downgrading `utoipa-swagger-ui` version
