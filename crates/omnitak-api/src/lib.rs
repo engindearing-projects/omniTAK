@@ -52,7 +52,6 @@ use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use tracing::{error, info};
 use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
 
 // ============================================================================
 // Server Configuration
@@ -284,10 +283,17 @@ impl Server {
         // Add WebSocket routes
         app = app.merge(websocket::create_ws_router(ws_state.clone()));
 
-        // Add Swagger UI if enabled
+        // Add OpenAPI JSON endpoint if enabled
         if self.config.enable_swagger {
-            app = app.merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()));
-            info!("Swagger UI enabled at /swagger-ui");
+            let openapi = ApiDoc::openapi();
+            app = app.route(
+                "/api-docs/openapi.json",
+                axum::routing::get(|| async move {
+                    axum::Json(openapi)
+                }),
+            );
+            info!("OpenAPI spec available at /api-docs/openapi.json");
+            info!("Custom API docs available at /api-docs.html, /rapidoc.html, /redoc.html");
         }
 
         // Add static file serving if enabled

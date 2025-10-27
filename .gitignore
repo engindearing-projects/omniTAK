@@ -38,3 +38,5 @@ config.yml
 # Build artifacts
 dist/
 build/
+demo_server/target/
+examples/

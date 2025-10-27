@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation - Omnicot API</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            max-width: 1400px;
+            margin: 0 auto 2rem;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 1.5rem;
+        }
+
+        .top-bar {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .search-box {
+            flex: 1;
+            max-width: 500px;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 40px 12px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 1rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .search-box input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.6);
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.7;
+        }
+
+        .auth-section {
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .auth-section input {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            color: #fff;
+            width: 200px;
+            font-size: 0.9rem;
+        }
+
+        .auth-section input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .auth-status {
+            font-size: 0.85rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .auth-status.active {
+            background: rgba(0, 255, 0, 0.2);
+            color: #4ade80;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 6px;
+            color: #fff;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+
+        .btn-primary {
+            background: rgba(59, 130, 246, 0.4);
+            border-color: rgba(59, 130, 246, 0.6);
+        }
+
+        .btn-primary:hover {
+            background: rgba(59, 130, 246, 0.5);
+            border-color: rgba(59, 130, 246, 0.8);
+        }
+
+        .btn-success {
+            background: rgba(34, 197, 94, 0.4);
+            border-color: rgba(34, 197, 94, 0.6);
+        }
+
+        .btn-success:hover {
+            background: rgba(34, 197, 94, 0.5);
+            border-color: rgba(34, 197, 94, 0.8);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            gap: 2rem;
+        }
+
+        .sidebar {
+            flex: 0 0 280px;
+            position: sticky;
+            top: 20px;
+            height: fit-content;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        .tag-group {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 1rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .tag-header {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tag-header:hover {
+            color: #60a5fa;
+        }
+
+        .collapse-icon {
+            transition: transform 0.3s ease;
+        }
+
+        .tag-header.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+
+        .endpoint-list {
+            list-style: none;
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            overflow: hidden;
+        }
+
+        .endpoint-list.collapsed {
+            max-height: 0 !important;
+            opacity: 0;
+        }
+
+        .endpoint-item {
+            padding: 8px 0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .endpoint-item:hover {
+            padding-left: 8px;
+            color: #60a5fa;
+        }
+
+        .method-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            min-width: 45px;
+            text-align: center;
+        }
+
+        .method-get { background: rgba(34, 197, 94, 0.4); }
+        .method-post { background: rgba(59, 130, 246, 0.4); }
+        .method-put { background: rgba(251, 146, 60, 0.4); }
+        .method-patch { background: rgba(168, 85, 247, 0.4); }
+        .method-delete { background: rgba(239, 68, 68, 0.4); }
+
+        .content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .endpoint-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .endpoint-card:hover {
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+        }
+
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .endpoint-header h3 {
+            font-size: 1.3rem;
+            flex: 1;
+        }
+
+        .endpoint-path {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 0.95rem;
+            word-break: break-all;
+        }
+
+        .endpoint-description {
+            margin-bottom: 16px;
+            line-height: 1.6;
+            opacity: 0.95;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 20px 0 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .params-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .params-table th,
+        .params-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .params-table th {
+            background: rgba(0, 0, 0, 0.3);
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .params-table td {
+            font-size: 0.9rem;
+        }
+
+        .params-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .param-name {
+            font-family: 'Courier New', monospace;
+            color: #60a5fa;
+        }
+
+        .param-type {
+            font-family: 'Courier New', monospace;
+            color: #a78bfa;
+            font-size: 0.85rem;
+        }
+
+        .required-badge {
+            background: rgba(239, 68, 68, 0.4);
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            color: #fff;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .try-it-section {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .form-input,
+        .form-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.9rem;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: rgba(59, 130, 246, 0.6);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .response-section {
+            margin-top: 16px;
+        }
+
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 6px 6px 0 0;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .status-code {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .status-success { background: rgba(34, 197, 94, 0.4); }
+        .status-error { background: rgba(239, 68, 68, 0.4); }
+        .status-info { background: rgba(59, 130, 246, 0.4); }
+
+        .response-time {
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 6px 6px 0 0;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .tab.active {
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            opacity: 0.7;
+        }
+
+        .no-results h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* JSON Syntax Highlighting */
+        .json-key { color: #60a5fa; }
+        .json-string { color: #4ade80; }
+        .json-number { color: #fbbf24; }
+        .json-boolean { color: #f472b6; }
+        .json-null { color: #94a3b8; }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                position: static;
+                flex: 1;
+                max-height: none;
+            }
+
+            .top-bar {
+                flex-direction: column;
+            }
+
+            .search-box {
+                max-width: none;
+            }
+
+            .auth-section {
+                flex-wrap: wrap;
+            }
+        }
+
+        @media (max-width: 640px) {
+            h1 {
+                font-size: 2rem;
+            }
+
+            .endpoint-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .params-table {
+                font-size: 0.8rem;
+            }
+
+            .params-table th,
+            .params-table td {
+                padding: 8px;
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            color: #fff;
+            padding-left: 8px;
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid rgba(239, 68, 68, 0.4);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .schema-object {
+            margin-left: 20px;
+            border-left: 2px solid rgba(255, 255, 255, 0.2);
+            padding-left: 12px;
+        }
+
+        .schema-property {
+            margin: 8px 0;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/" class="back-link">← Back to Home</a>
+        <h1>API Documentation</h1>
+        <p class="subtitle">Interactive API Explorer for Omnicot TAK Aggregator</p>
+
+        <div class="top-bar">
+            <div class="search-box">
+                <input
+                    type="text"
+                    id="searchInput"
+                    placeholder="Search endpoints, methods, or descriptions..."
+                    autocomplete="off"
+                >
+                <span class="search-icon">🔍</span>
+            </div>
+
+            <div class="auth-section">
+                <label for="authToken">Auth:</label>
+                <input
+                    type="text"
+                    id="authToken"
+                    placeholder="JWT or API Key"
+                    autocomplete="off"
+                >
+                <span class="auth-status" id="authStatus">No Auth</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <aside class="sidebar" id="sidebar">
+            <div id="sidebarContent"></div>
+        </aside>
+
+        <main class="content" id="content">
+            <div id="endpointsContainer"></div>
+            <div class="no-results" id="noResults" style="display: none;">
+                <h3>No endpoints found</h3>
+                <p>Try adjusting your search criteria</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // State Management
+        const state = {
+            spec: null,
+            authToken: localStorage.getItem('apiAuthToken') || '',
+            searchQuery: '',
+            collapsedTags: new Set(),
+            activeRequests: new Map()
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            initializeAuthToken();
+            await loadOpenAPISpec();
+            setupEventListeners();
+        });
+
+        // Load OpenAPI Specification
+        async function loadOpenAPISpec() {
+            try {
+                const response = await fetch('/api-docs/openapi.json');
+                if (!response.ok) throw new Error('Failed to load API specification');
+
+                state.spec = await response.json();
+                renderSidebar();
+                renderEndpoints();
+            } catch (error) {
+                console.error('Error loading OpenAPI spec:', error);
+                showError('Failed to load API specification. Please ensure the server is running.');
+            }
+        }
+
+        // Initialize Auth Token
+        function initializeAuthToken() {
+            const authInput = document.getElementById('authToken');
+            authInput.value = state.authToken;
+            updateAuthStatus();
+        }
+
+        // Setup Event Listeners
+        function setupEventListeners() {
+            const searchInput = document.getElementById('searchInput');
+            const authInput = document.getElementById('authToken');
+
+            searchInput.addEventListener('input', (e) => {
+                state.searchQuery = e.target.value.toLowerCase();
+                renderEndpoints();
+            });
+
+            authInput.addEventListener('input', (e) => {
+                state.authToken = e.target.value.trim();
+                localStorage.setItem('apiAuthToken', state.authToken);
+                updateAuthStatus();
+            });
+        }
+
+        // Update Auth Status Display
+        function updateAuthStatus() {
+            const statusEl = document.getElementById('authStatus');
+            if (state.authToken) {
+                statusEl.textContent = 'Authenticated';
+                statusEl.classList.add('active');
+            } else {
+                statusEl.textContent = 'No Auth';
+                statusEl.classList.remove('active');
+            }
+        }
+
+        // Group Endpoints by Tags
+        function groupEndpointsByTag() {
+            if (!state.spec || !state.spec.paths) return {};
+
+            const groups = {};
+
+            Object.entries(state.spec.paths).forEach(([path, methods]) => {
+                Object.entries(methods).forEach(([method, details]) => {
+                    if (method === 'parameters') return;
+
+                    const tags = details.tags || ['default'];
+                    tags.forEach(tag => {
+                        if (!groups[tag]) groups[tag] = [];
+                        groups[tag].push({
+                            path,
+                            method: method.toUpperCase(),
+                            ...details
+                        });
+                    });
+                });
+            });
+
+            return groups;
+        }
+
+        // Render Sidebar
+        function renderSidebar() {
+            const groups = groupEndpointsByTag();
+            const sidebarContent = document.getElementById('sidebarContent');
+
+            const html = Object.entries(groups)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([tag, endpoints]) => {
+                    const isCollapsed = state.collapsedTags.has(tag);
+                    const endpointsList = endpoints
+                        .map(ep => `
+                            <li class="endpoint-item" onclick="scrollToEndpoint('${tag}', '${ep.path}', '${ep.method}')">
+                                <span class="method-badge method-${ep.method.toLowerCase()}">${ep.method}</span>
+                                <span>${ep.path}</span>
+                            </li>
+                        `).join('');
+
+                    return `
+                        <div class="tag-group">
+                            <div class="tag-header ${isCollapsed ? 'collapsed' : ''}" onclick="toggleTag('${tag}')">
+                                <span>${tag}</span>
+                                <span class="collapse-icon">▼</span>
+                            </div>
+                            <ul class="endpoint-list ${isCollapsed ? 'collapsed' : ''}" style="max-height: ${isCollapsed ? '0' : '1000px'}">
+                                ${endpointsList}
+                            </ul>
+                        </div>
+                    `;
+                }).join('');
+
+            sidebarContent.innerHTML = html;
+        }
+
+        // Toggle Tag Collapse
+        function toggleTag(tag) {
+            if (state.collapsedTags.has(tag)) {
+                state.collapsedTags.delete(tag);
+            } else {
+                state.collapsedTags.add(tag);
+            }
+            renderSidebar();
+        }
+
+        // Scroll to Endpoint
+        function scrollToEndpoint(tag, path, method) {
+            const id = `endpoint-${tag}-${path}-${method}`.replace(/[^a-zA-Z0-9-]/g, '-');
+            const element = document.getElementById(id);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                element.style.borderColor = 'rgba(59, 130, 246, 0.8)';
+                setTimeout(() => {
+                    element.style.borderColor = '';
+                }, 2000);
+            }
+        }
+
+        // Render Endpoints
+        function renderEndpoints() {
+            const groups = groupEndpointsByTag();
+            const container = document.getElementById('endpointsContainer');
+            const noResults = document.getElementById('noResults');
+
+            let hasResults = false;
+            const html = Object.entries(groups)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([tag, endpoints]) => {
+                    const filteredEndpoints = endpoints.filter(ep =>
+                        matchesSearch(ep, state.searchQuery)
+                    );
+
+                    if (filteredEndpoints.length === 0) return '';
+                    hasResults = true;
+
+                    const endpointsHtml = filteredEndpoints
+                        .map(ep => renderEndpoint(tag, ep))
+                        .join('');
+
+                    return `
+                        <div class="tag-section">
+                            <h2 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid rgba(255, 255, 255, 0.3);">
+                                ${tag.charAt(0).toUpperCase() + tag.slice(1)}
+                            </h2>
+                            ${endpointsHtml}
+                        </div>
+                    `;
+                }).join('');
+
+            container.innerHTML = html;
+            noResults.style.display = hasResults ? 'none' : 'block';
+        }
+
+        // Check if endpoint matches search
+        function matchesSearch(endpoint, query) {
+            if (!query) return true;
+
+            const searchText = [
+                endpoint.path,
+                endpoint.method,
+                endpoint.summary || '',
+                endpoint.description || '',
+                endpoint.operationId || ''
+            ].join(' ').toLowerCase();
+
+            return searchText.includes(query);
+        }
+
+        // Render Single Endpoint
+        function renderEndpoint(tag, endpoint) {
+            const id = `endpoint-${tag}-${endpoint.path}-${endpoint.method}`.replace(/[^a-zA-Z0-9-]/g, '-');
+
+            return `
+                <div class="endpoint-card fade-in" id="${id}">
+                    <div class="endpoint-header">
+                        <span class="method-badge method-${endpoint.method.toLowerCase()}">${endpoint.method}</span>
+                        <h3>${endpoint.summary || endpoint.operationId || 'Endpoint'}</h3>
+                    </div>
+
+                    <div class="endpoint-path">${endpoint.path}</div>
+
+                    ${endpoint.description ? `
+                        <div class="endpoint-description">${endpoint.description}</div>
+                    ` : ''}
+
+                    ${renderParameters(endpoint)}
+                    ${renderRequestBody(endpoint)}
+                    ${renderResponses(endpoint)}
+                    ${renderTryIt(tag, endpoint)}
+                </div>
+            `;
+        }
+
+        // Render Parameters
+        function renderParameters(endpoint) {
+            const params = endpoint.parameters || [];
+            if (params.length === 0) return '';
+
+            const rows = params.map(param => `
+                <tr>
+                    <td>
+                        <span class="param-name">${param.name}</span>
+                        ${param.required ? '<span class="required-badge">REQUIRED</span>' : ''}
+                    </td>
+                    <td><span class="param-type">${param.schema?.type || param.type || 'string'}</span></td>
+                    <td>${param.in}</td>
+                    <td>${param.description || '-'}</td>
+                </tr>
+            `).join('');
+
+            return `
+                <div class="section-title">Parameters</div>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Location</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        // Render Request Body
+        function renderRequestBody(endpoint) {
+            const requestBody = endpoint.requestBody;
+            if (!requestBody) return '';
+
+            const content = requestBody.content?.['application/json'];
+            if (!content) return '';
+
+            const example = content.example || generateExample(content.schema);
+
+            return `
+                <div class="section-title">Request Body</div>
+                ${requestBody.description ? `<p style="margin-bottom: 12px; opacity: 0.9;">${requestBody.description}</p>` : ''}
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+                    <pre>${syntaxHighlight(JSON.stringify(example, null, 2))}</pre>
+                </div>
+            `;
+        }
+
+        // Render Responses
+        function renderResponses(endpoint) {
+            const responses = endpoint.responses || {};
+            if (Object.keys(responses).length === 0) return '';
+
+            const responsesHtml = Object.entries(responses)
+                .map(([status, response]) => {
+                    const content = response.content?.['application/json'];
+                    const example = content?.example || content?.schema?.example || generateExample(content?.schema);
+
+                    return `
+                        <div style="margin-bottom: 16px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                <span class="status-code status-${getStatusClass(status)}">${status}</span>
+                                <span>${response.description || ''}</span>
+                            </div>
+                            ${example ? `
+                                <div class="code-block">
+                                    <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+                                    <pre>${syntaxHighlight(JSON.stringify(example, null, 2))}</pre>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+
+            return `
+                <div class="section-title">Responses</div>
+                ${responsesHtml}
+            `;
+        }
+
+        // Render Try It Section
+        function renderTryIt(tag, endpoint) {
+            const operationId = endpoint.operationId || `${endpoint.method}-${endpoint.path}`.replace(/[^a-zA-Z0-9]/g, '-');
+            const params = endpoint.parameters || [];
+            const hasRequestBody = !!endpoint.requestBody;
+
+            const paramInputs = params.map(param => `
+                <div class="form-group">
+                    <label class="form-label">
+                        ${param.name} (${param.in})
+                        ${param.required ? '<span class="required-badge">REQUIRED</span>' : ''}
+                    </label>
+                    <input
+                        type="text"
+                        class="form-input"
+                        id="${operationId}-param-${param.name}"
+                        placeholder="${param.description || param.name}"
+                        ${param.schema?.default ? `value="${param.schema.default}"` : ''}
+                    >
+                </div>
+            `).join('');
+
+            const bodyInput = hasRequestBody ? `
+                <div class="form-group">
+                    <label class="form-label">Request Body (JSON)</label>
+                    <textarea
+                        class="form-textarea"
+                        id="${operationId}-body"
+                        placeholder="Enter JSON request body"
+                    >${JSON.stringify(generateExample(endpoint.requestBody?.content?.['application/json']?.schema), null, 2)}</textarea>
+                </div>
+            ` : '';
+
+            return `
+                <div class="try-it-section">
+                    <div class="section-title" style="margin-top: 0;">Try It Out</div>
+
+                    ${paramInputs}
+                    ${bodyInput}
+
+                    <button
+                        class="btn btn-success"
+                        onclick="executeRequest('${operationId}', '${endpoint.method}', '${endpoint.path}', ${hasRequestBody})"
+                    >
+                        Send Request
+                    </button>
+
+                    <div class="response-section" id="${operationId}-response" style="display: none;">
+                        <div class="response-header">
+                            <span class="status-code" id="${operationId}-status"></span>
+                            <span class="response-time" id="${operationId}-time"></span>
+                        </div>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+                            <pre id="${operationId}-response-body"></pre>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Execute API Request
+        async function executeRequest(operationId, method, path, hasBody) {
+            const responseSection = document.getElementById(`${operationId}-response`);
+            const statusEl = document.getElementById(`${operationId}-status`);
+            const timeEl = document.getElementById(`${operationId}-time`);
+            const bodyEl = document.getElementById(`${operationId}-response-body`);
+
+            // Show loading state
+            responseSection.style.display = 'block';
+            statusEl.innerHTML = '<span class="loading"></span>';
+            statusEl.className = 'status-code';
+            timeEl.textContent = 'Loading...';
+            bodyEl.textContent = '';
+
+            try {
+                // Build URL with parameters
+                const params = state.spec.paths[path]?.[method.toLowerCase()]?.parameters || [];
+                let url = path;
+                const queryParams = [];
+
+                params.forEach(param => {
+                    const value = document.getElementById(`${operationId}-param-${param.name}`)?.value;
+                    if (value) {
+                        if (param.in === 'path') {
+                            url = url.replace(`{${param.name}}`, encodeURIComponent(value));
+                        } else if (param.in === 'query') {
+                            queryParams.push(`${param.name}=${encodeURIComponent(value)}`);
+                        }
+                    }
+                });
+
+                if (queryParams.length > 0) {
+                    url += '?' + queryParams.join('&');
+                }
+
+                // Build request options
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                };
+
+                // Add auth header
+                if (state.authToken) {
+                    if (state.authToken.startsWith('Bearer ') || state.authToken.includes('.')) {
+                        options.headers['Authorization'] = state.authToken.startsWith('Bearer ')
+                            ? state.authToken
+                            : `Bearer ${state.authToken}`;
+                    } else {
+                        options.headers['X-API-Key'] = state.authToken;
+                    }
+                }
+
+                // Add request body
+                if (hasBody) {
+                    const bodyInput = document.getElementById(`${operationId}-body`)?.value;
+                    if (bodyInput) {
+                        try {
+                            const bodyJson = JSON.parse(bodyInput);
+                            options.body = JSON.stringify(bodyJson);
+                        } catch (e) {
+                            throw new Error('Invalid JSON in request body');
+                        }
+                    }
+                }
+
+                // Make request
+                const startTime = performance.now();
+                const response = await fetch(url, options);
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(0);
+
+                // Parse response
+                let responseData;
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    responseData = await response.json();
+                } else {
+                    responseData = await response.text();
+                }
+
+                // Update UI
+                statusEl.textContent = `${response.status} ${response.statusText}`;
+                statusEl.className = `status-code status-${getStatusClass(response.status)}`;
+                timeEl.textContent = `${duration}ms`;
+
+                if (typeof responseData === 'object') {
+                    bodyEl.innerHTML = syntaxHighlight(JSON.stringify(responseData, null, 2));
+                } else {
+                    bodyEl.textContent = responseData;
+                }
+
+            } catch (error) {
+                console.error('Request failed:', error);
+                statusEl.textContent = 'Error';
+                statusEl.className = 'status-code status-error';
+                timeEl.textContent = '';
+                bodyEl.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Helper Functions
+        function getStatusClass(status) {
+            const code = parseInt(status);
+            if (code >= 200 && code < 300) return 'success';
+            if (code >= 400) return 'error';
+            return 'info';
+        }
+
+        function generateExample(schema) {
+            if (!schema) return {};
+
+            if (schema.example) return schema.example;
+            if (schema.type === 'object' && schema.properties) {
+                const example = {};
+                Object.entries(schema.properties).forEach(([key, prop]) => {
+                    example[key] = generateExample(prop);
+                });
+                return example;
+            }
+            if (schema.type === 'array' && schema.items) {
+                return [generateExample(schema.items)];
+            }
+
+            // Default values by type
+            const defaults = {
+                string: 'string',
+                number: 0,
+                integer: 0,
+                boolean: false,
+                object: {},
+                array: []
+            };
+
+            return defaults[schema.type] || null;
+        }
+
+        function syntaxHighlight(json) {
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                let cls = 'json-number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'json-key';
+                    } else {
+                        cls = 'json-string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'json-boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'json-null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+
+        function copyToClipboard(button) {
+            const codeBlock = button.nextElementSibling;
+            const text = codeBlock.textContent;
+
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+            });
+        }
+
+        function showError(message) {
+            const container = document.getElementById('endpointsContainer');
+            container.innerHTML = `
+                <div class="error-message">
+                    <h3>Error</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

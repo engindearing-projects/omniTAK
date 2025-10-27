@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniTAK API Documentation</title>
+    <script type="module" src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem 2rem;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header h1 {
+            color: #fff;
+            font-size: 2rem;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header .subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+
+        .auth-section {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .auth-section label {
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .auth-section input {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            font-size: 0.9rem;
+            min-width: 250px;
+            transition: all 0.3s ease;
+        }
+
+        .auth-section input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .auth-section input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .auth-section button {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .auth-section button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .rapidoc-container {
+            height: calc(100vh - 120px);
+            width: 100%;
+        }
+
+        /* Custom RapiDoc styling */
+        rapi-doc::part(section-navbar) {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        }
+
+        rapi-doc::part(section-main-content) {
+            background: #1a1a1a;
+        }
+
+        rapi-doc::part(section-operations) {
+            background: #1f1f1f;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <div>
+                <h1>OmniTAK API Documentation</h1>
+                <div class="subtitle">TAK Aggregator REST API & WebSocket Interface</div>
+            </div>
+            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                <div class="auth-section">
+                    <label for="api-token">API Token:</label>
+                    <input
+                        type="password"
+                        id="api-token"
+                        placeholder="Enter your Bearer token"
+                        autocomplete="off"
+                    >
+                    <button onclick="applyToken()">Apply</button>
+                </div>
+                <div class="nav-links">
+                    <a href="/">Home</a>
+                    <a href="/health">Health</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="rapidoc-container">
+        <rapi-doc
+            id="rapidoc"
+            spec-url="/api-docs/openapi.json"
+
+            <!-- Theme Configuration -->
+            theme="dark"
+            bg-color="#1a1a1a"
+            text-color="#e0e0e0"
+            header-color="#1e3c72"
+            primary-color="#2a5298"
+            nav-bg-color="#0f1419"
+            nav-text-color="#ffffff"
+            nav-hover-bg-color="#1e3c72"
+            nav-hover-text-color="#ffffff"
+            nav-accent-color="#4a90e2"
+
+            <!-- Layout Configuration -->
+            layout="column"
+            render-style="focused"
+            schema-style="table"
+            schema-expand-level="1"
+            schema-description-expanded="true"
+
+            <!-- Navigation -->
+            show-header="false"
+            show-info="true"
+            info-description-headings-in-navbar="true"
+            use-path-in-nav-bar="false"
+            nav-item-spacing="relaxed"
+
+            <!-- API Interaction -->
+            allow-try="true"
+            allow-server-selection="true"
+            allow-authentication="true"
+            allow-spec-url-load="false"
+            allow-spec-file-load="false"
+
+            <!-- Request/Response -->
+            show-curl-before-try="true"
+            response-area-height="400px"
+
+            <!-- Search -->
+            allow-search="true"
+
+            <!-- Advanced Features -->
+            allow-advanced-search="true"
+            show-method-in-nav-bar="as-colored-text"
+
+            <!-- Code Samples -->
+            show-components="true"
+
+            <!-- Misc -->
+            sort-tags="false"
+            sort-endpoints-by="path"
+            heading-text="OmniTAK API"
+            goto-path=""
+            fill-request-fields-with-example="true"
+            persist-auth="true"
+
+            <!-- Fonts -->
+            regular-font="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif"
+            mono-font="'Courier New', Courier, monospace"
+            font-size="default"
+        >
+            <div slot="nav-logo" style="display: flex; align-items: center; padding: 1rem;">
+                <div style="font-size: 1.5rem; font-weight: bold; color: #fff; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);">
+                    OmniTAK
+                </div>
+            </div>
+        </rapi-doc>
+    </div>
+
+    <script>
+        // Apply authentication token to RapiDoc
+        function applyToken() {
+            const token = document.getElementById('api-token').value;
+            if (token) {
+                const rapidoc = document.getElementById('rapidoc');
+
+                // Set the authorization header
+                rapidoc.setAttribute('api-key-name', 'Authorization');
+                rapidoc.setAttribute('api-key-location', 'header');
+                rapidoc.setAttribute('api-key-value', `Bearer ${token}`);
+
+                // Store token in localStorage for persistence
+                localStorage.setItem('omnitak-api-token', token);
+
+                // Visual feedback
+                const input = document.getElementById('api-token');
+                const originalBg = input.style.background;
+                input.style.background = 'rgba(0, 255, 0, 0.2)';
+                setTimeout(() => {
+                    input.style.background = originalBg;
+                }, 500);
+
+                console.log('Authentication token applied');
+            } else {
+                alert('Please enter a valid API token');
+            }
+        }
+
+        // Load token from localStorage on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const storedToken = localStorage.getItem('omnitak-api-token');
+            if (storedToken) {
+                document.getElementById('api-token').value = storedToken;
+                applyToken();
+            }
+        });
+
+        // Allow Enter key to apply token
+        document.getElementById('api-token').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                applyToken();
+            }
+        });
+
+        // Monitor API spec loading
+        const rapidoc = document.getElementById('rapidoc');
+        rapidoc.addEventListener('spec-loaded', () => {
+            console.log('OpenAPI spec loaded successfully');
+        });
+
+        rapidoc.addEventListener('spec-error', (e) => {
+            console.error('Failed to load OpenAPI spec:', e.detail);
+        });
+    </script>
+</body>
+</html>

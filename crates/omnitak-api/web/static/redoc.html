@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniTAK API Documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #0a0e27;
+        }
+
+        /* Custom Header */
+        .custom-header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #1e3c72 100%);
+            color: #fff;
+            padding: 0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            border-bottom: 2px solid rgba(74, 222, 128, 0.3);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1.5rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header-brand {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .header-brand h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            letter-spacing: -0.5px;
+        }
+
+        .header-brand .subtitle {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            font-weight: 400;
+            letter-spacing: 0.3px;
+        }
+
+        .header-nav {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .header-btn {
+            padding: 0.625rem 1.25rem;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1.5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            color: #fff;
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.25s ease;
+            backdrop-filter: blur(10px);
+            white-space: nowrap;
+        }
+
+        .header-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .header-btn.primary {
+            background: rgba(74, 222, 128, 0.2);
+            border-color: rgba(74, 222, 128, 0.4);
+        }
+
+        .header-btn.primary:hover {
+            background: rgba(74, 222, 128, 0.3);
+            border-color: rgba(74, 222, 128, 0.6);
+        }
+
+        /* Redoc Container */
+        #redoc-container {
+            padding-top: 0;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .header-content {
+                padding: 1.25rem 1rem;
+            }
+
+            .header-brand h1 {
+                font-size: 1.5rem;
+            }
+
+            .header-brand .subtitle {
+                font-size: 0.75rem;
+            }
+
+            .header-nav {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .header-btn {
+                flex: 1;
+                text-align: center;
+                padding: 0.5rem 1rem;
+                font-size: 0.8rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header-btn {
+                font-size: 0.75rem;
+                padding: 0.5rem 0.75rem;
+            }
+        }
+
+        /* Loading Animation */
+        .loading-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1e3f 100%);
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(74, 222, 128, 0.2);
+            border-top-color: #4ade80;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Scrollbar Customization */
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0a0e27;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            border-radius: 6px;
+            border: 2px solid #0a0e27;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #2a5298, #3a62b8);
+        }
+    </style>
+</head>
+<body>
+    <!-- Custom Header -->
+    <header class="custom-header">
+        <div class="header-content">
+            <div class="header-brand">
+                <h1>OmniTAK API Documentation</h1>
+                <div class="subtitle">TAK Aggregator REST API & WebSocket Interface</div>
+            </div>
+            <nav class="header-nav">
+                <a href="/" class="header-btn">Home</a>
+                <a href="/swagger-ui" class="header-btn">Swagger UI</a>
+                <a href="/api/v1/status" class="header-btn">Status</a>
+                <a href="/api-docs/openapi.json" class="header-btn primary">OpenAPI Spec</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Loading Indicator -->
+    <div class="loading-container" id="loading">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- Redoc Container -->
+    <div id="redoc-container"></div>
+
+    <!-- Redoc Script from CDN -->
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+
+    <script>
+        // Initialize Redoc with custom theme and options
+        Redoc.init(
+            '/api-docs/openapi.json',
+            {
+                // Display Options
+                scrollYOffset: '.custom-header',
+                hideDownloadButton: true,
+                expandResponses: '200,201',
+                showExtensions: true,
+                sortPropsAlphabetically: true,
+                menuToggle: true,
+
+                // Search
+                disableSearch: false,
+
+                // Interactions
+                expandSingleSchemaField: true,
+                jsonSampleExpandLevel: 2,
+                hideSingleRequestSampleTab: false,
+
+                // Navigation
+                pathInMiddlePanel: false,
+                nativeScrollbars: true,
+
+                // Theme Configuration
+                theme: {
+                    colors: {
+                        // Primary brand colors
+                        primary: {
+                            main: '#4ade80',
+                            light: '#6ee7a7',
+                            dark: '#22c55e',
+                            contrastText: '#0a0e27'
+                        },
+
+                        // Success/Error states
+                        success: {
+                            main: '#4ade80',
+                            light: '#6ee7a7',
+                            dark: '#22c55e',
+                            contrastText: '#0a0e27'
+                        },
+                        error: {
+                            main: '#ef4444',
+                            light: '#f87171',
+                            dark: '#dc2626',
+                            contrastText: '#ffffff'
+                        },
+                        warning: {
+                            main: '#f59e0b',
+                            light: '#fbbf24',
+                            dark: '#d97706',
+                            contrastText: '#0a0e27'
+                        },
+                        info: {
+                            main: '#3b82f6',
+                            light: '#60a5fa',
+                            dark: '#2563eb',
+                            contrastText: '#ffffff'
+                        },
+
+                        // HTTP method colors (dark theme optimized)
+                        http: {
+                            get: '#4ade80',
+                            post: '#60a5fa',
+                            put: '#f59e0b',
+                            options: '#a78bfa',
+                            patch: '#ec4899',
+                            delete: '#ef4444',
+                            basic: '#999',
+                            link: '#3b82f6',
+                            head: '#a78bfa'
+                        },
+
+                        // Text colors
+                        text: {
+                            primary: '#e5e7eb',
+                            secondary: '#9ca3af',
+                            disabled: '#6b7280'
+                        },
+
+                        // Border colors
+                        border: {
+                            dark: '#374151',
+                            light: '#4b5563'
+                        },
+
+                        // Responses
+                        responses: {
+                            success: {
+                                color: '#4ade80',
+                                backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                                tabTextColor: '#4ade80'
+                            },
+                            error: {
+                                color: '#ef4444',
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                tabTextColor: '#ef4444'
+                            },
+                            redirect: {
+                                color: '#f59e0b',
+                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                tabTextColor: '#f59e0b'
+                            },
+                            info: {
+                                color: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                tabTextColor: '#3b82f6'
+                            }
+                        }
+                    },
+
+                    // Sidebar (left menu)
+                    sidebar: {
+                        backgroundColor: '#0a0e27',
+                        textColor: '#e5e7eb',
+                        activeTextColor: '#4ade80',
+                        groupItems: {
+                            activeBackgroundColor: 'rgba(74, 222, 128, 0.1)',
+                            activeTextColor: '#4ade80',
+                            textTransform: 'none'
+                        },
+                        level1Items: {
+                            activeBackgroundColor: 'rgba(74, 222, 128, 0.08)',
+                            activeTextColor: '#4ade80',
+                            textTransform: 'none'
+                        },
+                        arrow: {
+                            size: '1.2em',
+                            color: '#9ca3af'
+                        }
+                    },
+
+                    // Right panel (examples, requests)
+                    rightPanel: {
+                        backgroundColor: '#111827',
+                        textColor: '#e5e7eb',
+                        width: '40%'
+                    },
+
+                    // Code blocks
+                    codeBlock: {
+                        backgroundColor: '#1f2937',
+                        tokens: {}
+                    },
+
+                    // Typography
+                    typography: {
+                        fontSize: '14px',
+                        lineHeight: '1.6',
+                        fontWeightRegular: '400',
+                        fontWeightBold: '600',
+                        fontWeightLight: '300',
+                        fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                        headings: {
+                            fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                            fontWeight: '600',
+                            lineHeight: '1.4'
+                        },
+                        code: {
+                            fontSize: '13px',
+                            fontFamily: '"Fira Code", "Consolas", "Monaco", "Courier New", monospace',
+                            backgroundColor: 'rgba(31, 41, 55, 0.5)',
+                            color: '#4ade80',
+                            wrap: false
+                        },
+                        links: {
+                            color: '#60a5fa',
+                            visited: '#a78bfa',
+                            hover: '#93c5fd'
+                        }
+                    },
+
+                    // Schema
+                    schema: {
+                        linesColor: '#374151',
+                        defaultDetailsWidth: '75%',
+                        typeNameColor: '#60a5fa',
+                        typeTitleColor: '#e5e7eb',
+                        requireLabelColor: '#ef4444',
+                        labelsTextSize: '0.9em',
+                        nestingSpacing: '1em',
+                        nestedBackground: 'rgba(31, 41, 55, 0.3)',
+                        arrow: {
+                            size: '1.1em',
+                            color: '#9ca3af'
+                        }
+                    },
+
+                    // Spacing and Layout
+                    spacing: {
+                        unit: 5,
+                        sectionHorizontal: ({ spacing }) => spacing.unit * 8,
+                        sectionVertical: ({ spacing }) => spacing.unit * 8
+                    },
+
+                    // Shape
+                    shape: {
+                        borderRadius: '6px'
+                    },
+
+                    // Logo
+                    logo: {
+                        maxHeight: '50px',
+                        maxWidth: '200px',
+                        gutter: '20px'
+                    }
+                }
+            },
+            document.getElementById('redoc-container')
+        );
+
+        // Hide loading spinner after Redoc initializes
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                const loading = document.getElementById('loading');
+                if (loading) {
+                    loading.style.display = 'none';
+                }
+            }, 500);
+        });
+
+        // Error handling
+        window.addEventListener('error', function(e) {
+            console.error('Error loading Redoc:', e);
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.innerHTML = '<div style="color: #ef4444; text-align: center; padding: 2rem;"><h2>Failed to load API documentation</h2><p style="margin-top: 1rem;">Please check that the OpenAPI specification is available at /api-docs/openapi.json</p></div>';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -44,7 +44,6 @@ metrics-exporter-prometheus = "0.15"
 
 # OpenAPI documentation
 utoipa = { version = "4.2", features = ["axum_extras", "chrono", "uuid"] }
-utoipa-swagger-ui = { version = "7.1", features = ["axum"] }
 
 # Security
 rustls = "0.23"
