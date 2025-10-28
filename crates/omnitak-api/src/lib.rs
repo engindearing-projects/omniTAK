@@ -44,10 +44,15 @@ use middleware::{
     cors_layer, logging_middleware, rate_limit_middleware, request_id_middleware,
     security_headers_middleware, timeout_middleware, RateLimitState, ReadinessState,
 };
+use omnitak_pool::{
+    AggregatorConfig, ConcurrencyConfig, ConnectionPool, DistributionStrategy,
+    DistributorConfig, MessageAggregator, MessageDistributor, PoolConfig,
+};
 use rest::ApiState;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::signal;
+use tokio::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use tracing::{error, info};
@@ -268,8 +273,41 @@ impl Server {
         // Print embedded files in debug mode
         static_files::print_embedded_files();
 
+        // Initialize connection pool
+        info!("Initializing connection pool");
+        let pool_config = PoolConfig {
+            max_connections: 1000,
+            channel_capacity: 1024,
+            enable_metrics: true,
+        };
+        let pool = Arc::new(ConnectionPool::new(pool_config));
+
+        // Initialize message distributor
+        info!("Initializing message distributor");
+        let distributor_config = DistributorConfig {
+            strategy: DistributionStrategy::Multicast,
+            max_filters: 1000,
+            enable_metrics: true,
+        };
+        let distributor = Arc::new(MessageDistributor::new(distributor_config));
+
+        // Initialize message aggregator (for future use)
+        let aggregator_config = AggregatorConfig {
+            deduplication_window_secs: 60,
+            cache_size: 10000,
+            enable_metrics: true,
+        };
+        let _aggregator = Arc::new(MessageAggregator::new(aggregator_config));
+
         // Create application state
-        let api_state = ApiState::new(self.auth_service.clone());
+        let api_state = ApiState {
+            auth_service: self.auth_service.clone(),
+            audit_logger: Arc::new(middleware::AuditLogger::new()),
+            pool: pool.clone(),
+            distributor: distributor.clone(),
+            connections: Arc::new(RwLock::new(Vec::new())),
+        };
+
         let ws_state = websocket::WsState::new(self.auth_service.clone());
         let rate_limit_state = Arc::new(RateLimitState::new(self.config.rate_limit_rps));
         let readiness_state = Arc::new(ReadinessState::new());
