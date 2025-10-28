@@ -4,15 +4,26 @@ use crate::auth::{AuthService, AuthUser, RequireAdmin, RequireOperator};
 use crate::middleware::AuditLogger;
 use crate::types::*;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{ConnectInfo, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
     Json, Router,
 };
 use chrono::Utc;
+use std::net::SocketAddr;
+use omnitak_pool::{ConnectionPool, MessageDistributor, PoolMessage, FilterRule};
+use omnitak_client::{
+    ClientConfig, CotMessage, ReconnectConfig, TakClient,
+    tcp::{TcpClient, TcpClientConfig, FramingMode},
+    tls::{TlsClient, TlsClientConfig},
+    Bytes,
+};
 use serde::Deserialize;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::RwLock;
+use tokio_stream::StreamExt;
 use tracing::{error, info};
 use uuid::Uuid;
 use validator::Validate;
@@ -25,18 +36,9 @@ use validator::Validate;
 pub struct ApiState {
     pub auth_service: Arc<AuthService>,
     pub audit_logger: Arc<AuditLogger>,
-    // TODO: Add actual service connections when implemented
-    // pub pool_manager: Arc<PoolManager>,
-    // pub filter_engine: Arc<FilterEngine>,
-}
-
-impl ApiState {
-    pub fn new(auth_service: Arc<AuthService>) -> Self {
-        Self {
-            auth_service,
-            audit_logger: Arc::new(AuditLogger::new()),
-        }
-    }
+    pub pool: Arc<ConnectionPool>,
+    pub distributor: Arc<MessageDistributor>,
+    pub connections: Arc<RwLock<Vec<ConnectionInfo>>>,
 }
 
 // ============================================================================
@@ -146,15 +148,24 @@ fn default_limit() -> usize {
     )
 )]
 async fn list_connections(
-    State(_state): State<ApiState>,
-    Query(_query): Query<ListQuery>,
+    State(state): State<ApiState>,
+    Query(query): Query<ListQuery>,
     _user: AuthUser,
 ) -> Result<Json<ConnectionList>, ApiError> {
-    // TODO: Get actual connections from pool manager
-    let connections = vec![];
+    // Get connections from state
+    let all_connections = state.connections.read().await;
+    let total = all_connections.len();
+
+    // Apply pagination
+    let connections: Vec<ConnectionInfo> = all_connections
+        .iter()
+        .skip(query.offset)
+        .take(query.limit)
+        .cloned()
+        .collect();
 
     Ok(Json(ConnectionList {
-        total: connections.len(),
+        total,
         connections,
     }))
 }
@@ -177,12 +188,19 @@ async fn list_connections(
     )
 )]
 async fn get_connection(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
     Path(id): Path<Uuid>,
     _user: AuthUser,
 ) -> Result<Json<ConnectionInfo>, ApiError> {
-    // TODO: Get actual connection from pool manager
-    Err(ApiError::NotFound(format!("Connection {} not found", id)))
+    // Get connection from state by ID
+    let connections = state.connections.read().await;
+    let connection = connections
+        .iter()
+        .find(|c| c.id == id)
+        .cloned()
+        .ok_or_else(|| ApiError::NotFound(format!("Connection {} not found", id)))?;
+
+    Ok(Json(connection))
 }
 
 /// POST /api/v1/connections - Create new connection
@@ -204,30 +222,288 @@ async fn get_connection(
 async fn create_connection(
     State(state): State<ApiState>,
     RequireOperator(user): RequireOperator,
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     Json(request): Json<CreateConnectionRequest>,
 ) -> Result<(StatusCode, Json<CreateConnectionResponse>), ApiError> {
     // Validate request
     request.validate()?;
 
+    let connection_id = Uuid::new_v4();
+    let id_str = connection_id.to_string();
+    let address_with_port = format!("{}:{}", request.address, request.port);
+
     info!(
+        id = %connection_id,
         name = request.name,
         connection_type = ?request.connection_type,
-        address = request.address,
-        port = request.port,
+        address = %address_with_port,
         "Creating connection"
     );
 
-    // TODO: Actually create connection in pool manager
-    let connection_id = Uuid::new_v4();
+    // Add connection to pool
+    state.pool.add_connection(
+        id_str.clone(),
+        request.name.clone(),
+        address_with_port.clone(),
+        5, // Default priority
+    ).await.map_err(|e| {
+        error!(id = %connection_id, error = %e, "Failed to add connection to pool");
+        ApiError::InternalError(format!("Failed to add connection: {}", e))
+    })?;
 
-    // Audit log
+    // Get the connection's channels from pool
+    let connection = state.pool.get_connection(&id_str)
+        .ok_or_else(|| ApiError::InternalError("Connection not found in pool after creation".to_string()))?;
+
+    let pool_tx = connection.tx.clone();
+    let pool_rx = connection.rx.clone();
+
+    // Add filter for this connection
+    state.distributor.add_filter(id_str.clone(), FilterRule::AlwaysSend);
+
+    // Spawn client task based on connection type
+    let address_clone = address_with_port.clone();
+    let id_clone = id_str.clone();
+    let auto_reconnect = request.auto_reconnect;
+
+    match request.connection_type {
+        ConnectionType::TcpClient => {
+            info!(id = %connection_id, "Creating TCP client");
+
+            let config = TcpClientConfig {
+                base: ClientConfig {
+                    server_addr: address_with_port.clone(),
+                    connect_timeout: Duration::from_secs(10),
+                    read_timeout: Duration::from_secs(30),
+                    write_timeout: Duration::from_secs(10),
+                    recv_buffer_size: 65536,
+                    reconnect: ReconnectConfig {
+                        enabled: auto_reconnect,
+                        max_attempts: Some(5),
+                        initial_backoff: Duration::from_secs(1),
+                        max_backoff: Duration::from_secs(60),
+                        backoff_multiplier: 2.0,
+                    },
+                },
+                framing: FramingMode::Xml,
+                keepalive: true,
+                keepalive_interval: Some(Duration::from_secs(30)),
+                nagle: false,
+            };
+
+            let mut client = TcpClient::new(config);
+
+            // Spawn client task
+            tokio::spawn(async move {
+                info!(id = %id_clone, "Connecting TCP client");
+
+                if let Err(e) = client.connect().await {
+                    error!(id = %id_clone, error = %e, "Failed to connect TCP client");
+                    return;
+                }
+
+                info!(id = %id_clone, address = %address_clone, "TCP client connected");
+
+                let mut recv_stream = client.receive_cot();
+                let client_arc = Arc::new(tokio::sync::Mutex::new(client));
+                let client_write = Arc::clone(&client_arc);
+
+                let id_read = id_clone.clone();
+                let id_write = id_clone.clone();
+
+                // Read task (TAK server → Pool)
+                let read_task = tokio::spawn(async move {
+                    while let Some(result) = recv_stream.next().await {
+                        match result {
+                            Ok(cot_msg) => {
+                                info!(id = %id_read, bytes = cot_msg.data.len(), "Received CoT message");
+                                if let Err(e) = pool_tx.send_async(PoolMessage::Cot(cot_msg.data.to_vec())).await {
+                                    error!(id = %id_read, error = %e, "Failed to send to pool");
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                error!(id = %id_read, error = %e, "Error reading from TAK server");
+                                break;
+                            }
+                        }
+                    }
+                    info!(id = %id_read, "TCP read task terminated");
+                });
+
+                // Write task (Pool → TAK server)
+                let write_task = tokio::spawn(async move {
+                    loop {
+                        match pool_rx.recv_async().await {
+                            Ok(PoolMessage::Cot(data)) => {
+                                let cot_msg = CotMessage {
+                                    data: Bytes::from(data),
+                                    metadata: Default::default(),
+                                };
+                                let mut client = client_write.lock().await;
+                                if let Err(e) = client.send_cot(cot_msg).await {
+                                    error!(id = %id_write, error = %e, "Failed to send to TAK server");
+                                    break;
+                                }
+                            }
+                            Ok(PoolMessage::Shutdown) => {
+                                info!(id = %id_write, "Shutdown signal received");
+                                break;
+                            }
+                            Ok(PoolMessage::Ping) => continue,
+                            Err(e) => {
+                                error!(id = %id_write, error = %e, "Pool channel error");
+                                break;
+                            }
+                        }
+                    }
+                    info!(id = %id_write, "TCP write task terminated");
+                });
+
+                tokio::select! {
+                    _ = read_task => {}
+                    _ = write_task => {}
+                }
+            });
+        }
+        ConnectionType::TlsClient => {
+            info!(id = %connection_id, "Creating TLS client");
+
+            // Validate TLS cert paths are provided
+            let cert_path = request.tls_cert_path
+                .ok_or_else(|| ApiError::BadRequest("TLS certificate path required for TLS connection".to_string()))?;
+            let key_path = request.tls_key_path
+                .ok_or_else(|| ApiError::BadRequest("TLS key path required for TLS connection".to_string()))?;
+
+            let mut client_config = TlsClientConfig::new(
+                std::path::PathBuf::from(cert_path),
+                std::path::PathBuf::from(key_path),
+            );
+            client_config.base.server_addr = address_with_port.clone();
+            client_config.base.connect_timeout = Duration::from_secs(10);
+            client_config.base.read_timeout = Duration::from_secs(30);
+            client_config.base.write_timeout = Duration::from_secs(10);
+            client_config.base.recv_buffer_size = 65536;
+            client_config.base.reconnect = ReconnectConfig {
+                enabled: auto_reconnect,
+                max_attempts: Some(5),
+                initial_backoff: Duration::from_secs(1),
+                max_backoff: Duration::from_secs(60),
+                backoff_multiplier: 2.0,
+            };
+            client_config.verify_server = request.validate_certs;
+
+            let mut client = TlsClient::new(client_config)
+                .map_err(|e| ApiError::InternalError(format!("Failed to create TLS client: {}", e)))?;
+
+            // Spawn client task (similar pattern to TCP)
+            tokio::spawn(async move {
+                info!(id = %id_clone, "Connecting TLS client");
+
+                if let Err(e) = client.connect().await {
+                    error!(id = %id_clone, error = %e, "Failed to connect TLS client");
+                    return;
+                }
+
+                info!(id = %id_clone, address = %address_clone, "TLS client connected");
+
+                let mut recv_stream = client.receive_cot();
+                let client_arc = Arc::new(tokio::sync::Mutex::new(client));
+                let client_write = Arc::clone(&client_arc);
+
+                let id_read = id_clone.clone();
+                let id_write = id_clone.clone();
+
+                let read_task = tokio::spawn(async move {
+                    while let Some(result) = recv_stream.next().await {
+                        match result {
+                            Ok(cot_msg) => {
+                                info!(id = %id_read, bytes = cot_msg.data.len(), "Received CoT message (TLS)");
+                                if let Err(e) = pool_tx.send_async(PoolMessage::Cot(cot_msg.data.to_vec())).await {
+                                    error!(id = %id_read, error = %e, "Failed to send to pool");
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                error!(id = %id_read, error = %e, "Error reading from TLS TAK server");
+                                break;
+                            }
+                        }
+                    }
+                    info!(id = %id_read, "TLS read task terminated");
+                });
+
+                let write_task = tokio::spawn(async move {
+                    loop {
+                        match pool_rx.recv_async().await {
+                            Ok(PoolMessage::Cot(data)) => {
+                                let cot_msg = CotMessage {
+                                    data: Bytes::from(data),
+                                    metadata: Default::default(),
+                                };
+                                let mut client = client_write.lock().await;
+                                if let Err(e) = client.send_cot(cot_msg).await {
+                                    error!(id = %id_write, error = %e, "Failed to send to TLS TAK server");
+                                    break;
+                                }
+                            }
+                            Ok(PoolMessage::Shutdown) => {
+                                info!(id = %id_write, "Shutdown signal received");
+                                break;
+                            }
+                            Ok(PoolMessage::Ping) => continue,
+                            Err(e) => {
+                                error!(id = %id_write, error = %e, "Pool channel error");
+                                break;
+                            }
+                        }
+                    }
+                    info!(id = %id_write, "TLS write task terminated");
+                });
+
+                tokio::select! {
+                    _ = read_task => {}
+                    _ = write_task => {}
+                }
+            });
+        }
+        _ => {
+            return Err(ApiError::BadRequest(format!(
+                "Connection type {:?} not yet supported",
+                request.connection_type
+            )));
+        }
+    }
+
+    // Store connection info
+    let conn_info = ConnectionInfo {
+        id: connection_id,
+        name: request.name.clone(),
+        connection_type: request.connection_type,
+        status: ConnectionStatus::Connecting,
+        address: request.address.clone(),
+        port: request.port,
+        messages_received: 0,
+        messages_sent: 0,
+        bytes_received: 0,
+        bytes_sent: 0,
+        connected_at: None,
+        last_activity: None,
+        error: None,
+    };
+
+    let mut connections = state.connections.write().await;
+    connections.push(conn_info);
+    drop(connections);
+
+    // Audit log with actual client IP
     state.audit_logger.log(
         user.0.user_id.unwrap_or_else(|| "api_key".to_string()),
         user.0.role,
         "create_connection".to_string(),
         format!("/api/v1/connections/{}", connection_id),
         serde_json::to_value(&request).unwrap(),
-        "0.0.0.0".to_string(), // TODO: Get actual IP
+        client_addr.ip().to_string(),
         true,
     );
 
@@ -262,19 +538,41 @@ async fn delete_connection(
     State(state): State<ApiState>,
     Path(id): Path<Uuid>,
     RequireOperator(user): RequireOperator,
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
 ) -> Result<Json<DeleteConnectionResponse>, ApiError> {
+    let id_str = id.to_string();
     info!(connection_id = %id, "Deleting connection");
 
-    // TODO: Actually delete connection from pool manager
+    // Remove from connection pool
+    state.pool.remove_connection(&id_str).await
+        .map_err(|e| {
+            error!(connection_id = %id, error = %e, "Failed to remove connection from pool");
+            ApiError::InternalError(format!("Failed to remove connection: {}", e))
+        })?;
 
-    // Audit log
+    // Remove from state tracking
+    let mut connections = state.connections.write().await;
+    let initial_len = connections.len();
+    connections.retain(|c| c.id != id);
+
+    if connections.len() == initial_len {
+        return Err(ApiError::NotFound(format!("Connection {} not found", id)));
+    }
+    drop(connections);
+
+    // Remove filter
+    state.distributor.remove_filter(&id_str);
+
+    info!(connection_id = %id, "Connection deleted successfully");
+
+    // Audit log with actual client IP
     state.audit_logger.log(
         user.0.user_id.unwrap_or_else(|| "api_key".to_string()),
         user.0.role,
         "delete_connection".to_string(),
         format!("/api/v1/connections/{}", id),
         serde_json::json!({"connection_id": id}),
-        "0.0.0.0".to_string(), // TODO: Get actual IP
+        client_addr.ip().to_string(),
         true,
     );
 

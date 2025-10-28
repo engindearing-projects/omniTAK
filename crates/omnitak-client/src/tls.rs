@@ -5,7 +5,8 @@ use crate::state::{ConnectionState, ConnectionStatus};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use bytes::BytesMut;
-use rustls::pki_types::{CertificateDer, ServerName};
+use omnitak_cert::{CertificateBundle, CertificateData};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
 use rustls::{ClientConfig as RustlsConfig, RootCertStore};
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -25,16 +26,38 @@ const NEWLINE_DELIMITER: u8 = b'\n';
 /// Maximum frame size (10MB)
 const MAX_FRAME_SIZE: usize = 10 * 1024 * 1024;
 
+/// TLS certificate source - either from files or in-memory data
+#[derive(Debug, Clone)]
+pub enum TlsCertSource {
+    /// Load certificates from file paths
+    Files {
+        /// Path to client certificate (PEM format)
+        cert_path: PathBuf,
+        /// Path to client private key (PEM format)
+        key_path: PathBuf,
+        /// Path to CA certificate for server verification (PEM format)
+        ca_cert_path: Option<PathBuf>,
+    },
+    /// Use certificates from memory (uploaded via web UI)
+    Memory {
+        /// Client certificate data
+        cert_data: CertificateData,
+        /// Private key data (optional for PKCS#12)
+        key_data: Option<CertificateData>,
+        /// CA certificate data (optional)
+        ca_data: Option<CertificateData>,
+        /// Password for encrypted certificates (PKCS#12)
+        password: Option<String>,
+    },
+    /// Use pre-parsed certificate bundle
+    Bundle(CertificateBundle),
+}
+
 /// TLS certificate configuration
 #[derive(Debug, Clone)]
 pub struct TlsCertConfig {
-    /// Path to client certificate (PEM format)
-    pub cert_path: PathBuf,
-    /// Path to client private key (PEM format)
-    pub key_path: PathBuf,
-    /// Path to CA certificate for server verification (PEM format)
-    /// If None, system root certificates will be used
-    pub ca_cert_path: Option<PathBuf>,
+    /// Certificate source (files, memory, or bundle)
+    pub source: TlsCertSource,
 }
 
 /// Configuration specific to TLS client
@@ -54,14 +77,16 @@ pub struct TlsClientConfig {
 }
 
 impl TlsClientConfig {
-    /// Create a new TLS client configuration
+    /// Create a new TLS client configuration from file paths
     pub fn new(cert_path: PathBuf, key_path: PathBuf) -> Self {
         Self {
             base: ClientConfig::default(),
             cert_config: TlsCertConfig {
-                cert_path,
-                key_path,
-                ca_cert_path: None,
+                source: TlsCertSource::Files {
+                    cert_path,
+                    key_path,
+                    ca_cert_path: None,
+                },
             },
             server_name: None,
             tls13_only: true,
@@ -69,9 +94,47 @@ impl TlsClientConfig {
         }
     }
 
-    /// Set CA certificate path
+    /// Create a new TLS client configuration from in-memory certificate data
+    pub fn from_memory(
+        cert_data: CertificateData,
+        key_data: Option<CertificateData>,
+        ca_data: Option<CertificateData>,
+        password: Option<String>,
+    ) -> Self {
+        Self {
+            base: ClientConfig::default(),
+            cert_config: TlsCertConfig {
+                source: TlsCertSource::Memory {
+                    cert_data,
+                    key_data,
+                    ca_data,
+                    password,
+                },
+            },
+            server_name: None,
+            tls13_only: true,
+            verify_server: true,
+        }
+    }
+
+    /// Create a new TLS client configuration from a certificate bundle
+    pub fn from_bundle(bundle: CertificateBundle) -> Self {
+        Self {
+            base: ClientConfig::default(),
+            cert_config: TlsCertConfig {
+                source: TlsCertSource::Bundle(bundle),
+            },
+            server_name: None,
+            tls13_only: true,
+            verify_server: true,
+        }
+    }
+
+    /// Set CA certificate path (only for file-based config)
     pub fn with_ca_cert(mut self, ca_cert_path: PathBuf) -> Self {
-        self.cert_config.ca_cert_path = Some(ca_cert_path);
+        if let TlsCertSource::Files { ref mut ca_cert_path: ca, .. } = self.cert_config.source {
+            *ca = Some(ca_cert_path);
+        }
         self
     }
 
@@ -119,26 +182,38 @@ impl TlsClient {
     fn build_tls_config(config: &TlsClientConfig) -> Result<RustlsConfig> {
         info!("Building TLS configuration");
 
+        // Load or parse certificate bundle based on source
+        let bundle = match &config.cert_config.source {
+            TlsCertSource::Files { cert_path, key_path, ca_cert_path } => {
+                info!("Loading certificates from files");
+                Self::load_bundle_from_files(cert_path, key_path, ca_cert_path.as_ref())?
+            }
+            TlsCertSource::Memory { cert_data, key_data, ca_data, password } => {
+                info!("Loading certificates from memory");
+                CertificateBundle::from_certificate_data(
+                    cert_data,
+                    key_data.as_ref(),
+                    ca_data.as_ref(),
+                    password.as_deref(),
+                )?
+            }
+            TlsCertSource::Bundle(bundle) => {
+                info!("Using pre-parsed certificate bundle");
+                bundle.clone()
+            }
+        };
+
         // Load root certificates
         let mut root_store = RootCertStore::empty();
 
-        if let Some(ca_cert_path) = &config.cert_config.ca_cert_path {
-            // Load custom CA certificate
-            let ca_cert_file = std::fs::File::open(ca_cert_path)
-                .context("Failed to open CA certificate file")?;
-            let mut ca_cert_reader = BufReader::new(ca_cert_file);
-
-            let certs = rustls_pemfile::certs(&mut ca_cert_reader)
-                .collect::<Result<Vec<_>, _>>()
-                .context("Failed to parse CA certificates")?;
-
-            for cert in certs {
+        if let Some(ca_certs) = &bundle.ca_certs {
+            // Use custom CA certificates from bundle
+            for cert in ca_certs {
                 root_store
-                    .add(cert)
+                    .add(cert.clone())
                     .context("Failed to add CA certificate to root store")?;
             }
-
-            info!("Loaded custom CA certificate from {:?}", ca_cert_path);
+            info!("Loaded {} custom CA certificate(s)", ca_certs.len());
         } else {
             // Use system root certificates
             root_store.extend(
@@ -149,35 +224,12 @@ impl TlsClient {
             info!("Using system root certificates");
         }
 
-        // Load client certificate and key
-        let cert_file = std::fs::File::open(&config.cert_config.cert_path)
-            .context("Failed to open client certificate file")?;
-        let mut cert_reader = BufReader::new(cert_file);
-
-        let certs: Vec<CertificateDer> = rustls_pemfile::certs(&mut cert_reader)
-            .collect::<Result<Vec<_>, _>>()
-            .context("Failed to parse client certificates")?;
-
-        if certs.is_empty() {
-            return Err(anyhow!("No certificates found in certificate file"));
-        }
-
-        info!("Loaded {} client certificate(s)", certs.len());
-
-        let key_file = std::fs::File::open(&config.cert_config.key_path)
-            .context("Failed to open private key file")?;
-        let mut key_reader = BufReader::new(key_file);
-
-        let key = rustls_pemfile::private_key(&mut key_reader)
-            .context("Failed to read private key")?
-            .ok_or_else(|| anyhow!("No private key found in key file"))?;
-
-        info!("Loaded client private key");
+        info!("Loaded {} client certificate(s)", bundle.certs.len());
 
         // Build TLS configuration
         let mut tls_config = RustlsConfig::builder()
             .with_root_certificates(root_store)
-            .with_client_auth_cert(certs, key)
+            .with_client_auth_cert(bundle.certs, bundle.private_key)
             .context("Failed to build TLS config with client auth")?;
 
         // Configure TLS versions
@@ -194,6 +246,60 @@ impl TlsClient {
         tls_config.alpn_protocols = vec![b"http/1.1".to_vec()];
 
         Ok(tls_config)
+    }
+
+    /// Load certificate bundle from file paths
+    fn load_bundle_from_files(
+        cert_path: &PathBuf,
+        key_path: &PathBuf,
+        ca_cert_path: Option<&PathBuf>,
+    ) -> Result<CertificateBundle> {
+        // Load client certificate
+        let cert_file = std::fs::File::open(cert_path)
+            .context("Failed to open client certificate file")?;
+        let mut cert_reader = BufReader::new(cert_file);
+
+        let certs: Vec<CertificateDer> = rustls_pemfile::certs(&mut cert_reader)
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to parse client certificates")?;
+
+        if certs.is_empty() {
+            return Err(anyhow!("No certificates found in certificate file"));
+        }
+
+        // Load private key
+        let key_file = std::fs::File::open(key_path)
+            .context("Failed to open private key file")?;
+        let mut key_reader = BufReader::new(key_file);
+
+        let private_key = rustls_pemfile::private_key(&mut key_reader)
+            .context("Failed to read private key")?
+            .ok_or_else(|| anyhow!("No private key found in key file"))?;
+
+        // Load CA certificate if provided
+        let ca_certs = if let Some(ca_path) = ca_cert_path {
+            let ca_cert_file = std::fs::File::open(ca_path)
+                .context("Failed to open CA certificate file")?;
+            let mut ca_cert_reader = BufReader::new(ca_cert_file);
+
+            let ca_certs: Vec<CertificateDer> = rustls_pemfile::certs(&mut ca_cert_reader)
+                .collect::<Result<Vec<_>, _>>()
+                .context("Failed to parse CA certificates")?;
+
+            if !ca_certs.is_empty() {
+                Some(ca_certs)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Ok(CertificateBundle {
+            certs,
+            private_key,
+            ca_certs,
+        })
     }
 
     /// Extract server name from address
