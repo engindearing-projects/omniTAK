@@ -26,6 +26,8 @@ pub enum FramingMode {
     Newline,
     /// Length-prefixed frames (4-byte big-endian length header)
     LengthPrefixed,
+    /// XML-delimited frames (read until '>' character for TAK CoT messages)
+    Xml,
 }
 
 /// Configuration specific to TCP client
@@ -141,6 +143,7 @@ impl TcpClient {
         match self.config.framing {
             FramingMode::Newline => self.read_newline_frame(buffer).await,
             FramingMode::LengthPrefixed => self.read_length_prefixed_frame(buffer).await,
+            FramingMode::Xml => self.read_xml_frame(buffer).await,
         }
     }
 
@@ -246,6 +249,59 @@ impl TcpClient {
         }
     }
 
+    /// Read an XML-delimited frame (for TAK CoT messages)
+    /// TAK messages are XML documents ending with '>'
+    pub async fn read_xml_frame(
+        &mut self,
+        buffer: &mut BytesMut,
+    ) -> Result<Option<bytes::Bytes>> {
+        const XML_END: u8 = b'>';
+
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or_else(|| anyhow!("Not connected"))?;
+
+        loop {
+            // Check if we have a complete XML frame in the buffer (ending with '>')
+            if let Some(pos) = buffer.iter().position(|&b| b == XML_END) {
+                let frame = buffer.split_to(pos + 1);
+                let frame_bytes = frame.freeze();
+
+                // Validate that it looks like XML (starts with '<')
+                if frame_bytes.is_empty() || frame_bytes[0] != b'<' {
+                    // Skip invalid data until we find a '<'
+                    continue;
+                }
+
+                self.status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                return Ok(Some(frame_bytes));
+            }
+
+            // Check buffer size limit
+            if buffer.len() >= MAX_FRAME_SIZE {
+                return Err(anyhow!("XML frame too large"));
+            }
+
+            // Read more data
+            let read_result = timeout(
+                self.config.base.read_timeout,
+                stream.read_buf(buffer),
+            )
+            .await
+            .context("Read timeout")?
+            .context("Read error")?;
+
+            if read_result == 0 {
+                if buffer.is_empty() {
+                    return Ok(None); // Clean disconnect
+                } else {
+                    return Err(anyhow!("Connection closed with incomplete XML frame"));
+                }
+            }
+        }
+    }
+
     /// Write a frame to the stream
     async fn write_frame(&mut self, data: &[u8]) -> Result<()> {
         let stream = self
@@ -283,6 +339,16 @@ impl TcpClient {
                 .context("Write timeout")?
                 .context("Write error")?;
 
+                timeout(
+                    self.config.base.write_timeout,
+                    stream.write_all(data),
+                )
+                .await
+                .context("Write timeout")?
+                .context("Write error")?;
+            }
+            FramingMode::Xml => {
+                // For XML framing, write the data as-is (should already be complete XML)
                 timeout(
                     self.config.base.write_timeout,
                     stream.write_all(data),
