@@ -53,6 +53,9 @@ pub use client::{
 };
 pub use state::{ConnectionMetrics, ConnectionState, ConnectionStatus, MetricsSnapshot};
 
+// Re-export bytes for convenience
+pub use bytes::{Bytes, BytesMut};
+
 #[cfg(test)]
 mod tests {
     use super::*;

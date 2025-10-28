@@ -14,7 +14,7 @@ use omnitak_pool::{
     AggregatorConfig, ConcurrencyConfig, ConcurrencyLimiter, DistributionStrategy,
     DistributorConfig, FilterRule, HealthConfig, HealthMonitor, InboundMessage,
     MessageAggregator, MessageDistributor, MetricsConfig, MetricsRegistry, PoolConfig,
-    ConnectionPool, PoolMessage,
+    ConnectionPool,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -162,6 +162,7 @@ async fn main() -> anyhow::Result<()> {
     // 9. Start statistics reporter
     let pool_clone = Arc::clone(&pool);
     let metrics_clone = Arc::clone(&metrics);
+    let limiter_clone = Arc::clone(&limiter);
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(10));
 
@@ -187,7 +188,7 @@ async fn main() -> anyhow::Result<()> {
             );
 
             // Print limiter stats
-            let limiter_stats = limiter.stats();
+            let limiter_stats = limiter_clone.stats();
             info!(
                 "Concurrency - Active: {}, Queued: {}, Accepted: {}, Rejected: {}",
                 limiter_stats.active_connections,

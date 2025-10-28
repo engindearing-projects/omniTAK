@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniTAK - TAK Server Manager</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛰️ OmniTAK</h1>
+            <p class="subtitle">Military-Grade TAK Server Aggregator</p>
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-label">System Status:</span>
+                    <span id="system-status" class="status-value offline">Offline</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Active Connections:</span>
+                    <span id="active-connections" class="status-value">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Messages:</span>
+                    <span id="message-count" class="status-value">0</span>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <!-- Add Connection Section -->
+            <section class="card">
+                <h2>Add TAK Server Connection</h2>
+                <form id="connection-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="connection-name">Connection Name *</label>
+                            <input type="text" id="connection-name" placeholder="e.g., Primary TAK Server" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="connection-id">Connection ID *</label>
+                            <input type="text" id="connection-id" placeholder="e.g., primary-tak-1" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="server-host">Server Host *</label>
+                            <input type="text" id="server-host" placeholder="e.g., 192.168.1.100 or public.opentakserver.io" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="server-port">Port *</label>
+                            <input type="number" id="server-port" placeholder="8087" min="1" max="65535" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="protocol">Protocol *</label>
+                            <select id="protocol" required>
+                                <option value="tcp">TCP</option>
+                                <option value="tls">TLS (Secure)</option>
+                                <option value="udp">UDP</option>
+                                <option value="websocket">WebSocket</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="priority">Priority</label>
+                            <input type="number" id="priority" value="5" min="1" max="10">
+                            <small>1 = Low, 10 = High</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="auto-reconnect">Auto-Reconnect</label>
+                            <label class="switch">
+                                <input type="checkbox" id="auto-reconnect" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- TLS/Certificate Section (shown when TLS is selected) -->
+                    <div id="tls-section" class="tls-section" style="display: none;">
+                        <h3>TLS Configuration</h3>
+
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="client-cert">Client Certificate (.p12, .pem, .crt)</label>
+                                <div class="file-upload">
+                                    <input type="file" id="client-cert" accept=".p12,.pem,.crt,.cer">
+                                    <label for="client-cert" class="file-label">
+                                        <span class="file-icon">📁</span>
+                                        <span id="client-cert-name">Choose file...</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="client-key">Client Private Key (.key, .pem)</label>
+                                <div class="file-upload">
+                                    <input type="file" id="client-key" accept=".key,.pem">
+                                    <label for="client-key" class="file-label">
+                                        <span class="file-icon">🔑</span>
+                                        <span id="client-key-name">Choose file...</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="ca-cert">CA Certificate (.pem, .crt)</label>
+                                <div class="file-upload">
+                                    <input type="file" id="ca-cert" accept=".pem,.crt,.cer">
+                                    <label for="ca-cert" class="file-label">
+                                        <span class="file-icon">🛡️</span>
+                                        <span id="ca-cert-name">Choose file...</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="cert-password">Certificate Password (if encrypted)</label>
+                                <input type="password" id="cert-password" placeholder="Enter password...">
+                                <small>Leave blank if certificate is not password-protected</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="verify-hostname">Verify Hostname</label>
+                                <label class="switch">
+                                    <input type="checkbox" id="verify-hostname" checked>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="tls-version">Minimum TLS Version</label>
+                                <select id="tls-version">
+                                    <option value="1.2">TLS 1.2</option>
+                                    <option value="1.3" selected>TLS 1.3</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Options -->
+                    <details class="advanced-options">
+                        <summary>Advanced Options</summary>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="connect-timeout">Connection Timeout (seconds)</label>
+                                <input type="number" id="connect-timeout" value="10" min="1" max="60">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="read-timeout">Read Timeout (seconds)</label>
+                                <input type="number" id="read-timeout" value="30" min="1" max="300">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="retry-attempts">Max Retry Attempts</label>
+                                <input type="number" id="retry-attempts" value="3" min="0" max="10">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="buffer-size">Buffer Size (KB)</label>
+                                <input type="number" id="buffer-size" value="64" min="8" max="1024">
+                            </div>
+                        </div>
+                    </details>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Add Connection</button>
+                        <button type="button" class="btn btn-secondary" id="test-connection">Test Connection</button>
+                        <button type="reset" class="btn btn-secondary">Reset</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Active Connections Section -->
+            <section class="card">
+                <h2>Active Connections</h2>
+                <div id="connections-list" class="connections-list">
+                    <div class="empty-state">
+                        <p>No active connections. Add a TAK server above to get started.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Message Statistics Section -->
+            <section class="card">
+                <h2>Message Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="messages-received">0</div>
+                        <div class="stat-label">Messages Received</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="messages-sent">0</div>
+                        <div class="stat-label">Messages Sent</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="messages-filtered">0</div>
+                        <div class="stat-label">Messages Filtered</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="messages-duplicated">0</div>
+                        <div class="stat-label">Duplicates Detected</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="throughput">0.00/s</div>
+                        <div class="stat-label">Throughput</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="errors">0</div>
+                        <div class="stat-label">Errors</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Messages Section -->
+            <section class="card">
+                <h2>Recent Messages</h2>
+                <div class="messages-controls">
+                    <button class="btn btn-small" id="clear-messages">Clear</button>
+                    <label class="switch">
+                        <input type="checkbox" id="auto-scroll" checked>
+                        <span class="slider"></span>
+                        <span class="switch-label">Auto-scroll</span>
+                    </label>
+                </div>
+                <div id="messages-log" class="messages-log">
+                    <div class="empty-state">
+                        <p>No messages yet. Messages will appear here when connections are active.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>OmniTAK v0.1.0 | Built with Rust |
+                <a href="https://github.com/engindearing-projects/omniTAK" target="_blank">GitHub</a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
