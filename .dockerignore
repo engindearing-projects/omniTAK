@@ -1,0 +1,58 @@
+# Build artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Documentation
+*.md
+!README.md
+LICENSE*
+docs/
+
+# Config files (will be mounted)
+config/*.yaml
+config/*.yml
+!config/example.yaml
+
+# Certificates (will be mounted)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Temporary files
+*.tmp
+*.log
+tmp/
+
+# Development
+.env
+.env.*
+docker-compose.yml
+docker-compose.*.yml
+
+# Test files
+tests/fixtures/
+
+# Web development
+web/node_modules/
+web/dist/
+web/.next/

@@ -113,6 +113,7 @@ tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
+serde_yaml = { workspace = true }
 config = { workspace = true }
 
 [profile.release]

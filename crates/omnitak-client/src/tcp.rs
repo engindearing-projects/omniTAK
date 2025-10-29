@@ -138,6 +138,69 @@ impl TcpClient {
         Ok(())
     }
 
+    /// Connect to the server without starting the receive task
+    /// This is useful when you want to manually manage reading and writing
+    pub async fn connect_only(&mut self) -> Result<()> {
+        let config = self.config.base.reconnect.clone();
+
+        // Inline retry logic to avoid closure capture issues
+        let result = if !config.enabled {
+            self.establish_connection().await
+        } else {
+            let mut attempt = 0u32;
+            loop {
+                match self.establish_connection().await {
+                    Ok(()) => {
+                        if attempt > 0 {
+                            info!(
+                                attempt = attempt,
+                                "Successfully reconnected after {} attempts",
+                                attempt
+                            );
+                        }
+                        break Ok(());
+                    }
+                    Err(e) => {
+                        attempt += 1;
+
+                        if let Some(max) = config.max_attempts {
+                            if attempt >= max {
+                                error!(
+                                    attempt = attempt,
+                                    error = %e,
+                                    "Max reconnect attempts reached"
+                                );
+                                break Err(e);
+                            }
+                        }
+
+                        let backoff = calculate_backoff(attempt - 1, &config);
+                        warn!(
+                            attempt = attempt,
+                            backoff_secs = backoff.as_secs(),
+                            error = %e,
+                            "Connection attempt failed, retrying after backoff"
+                        );
+
+                        tokio::time::sleep(backoff).await;
+                    }
+                }
+            }
+        };
+
+        result
+    }
+
+    /// Get a mutable reference to the stream for manual reading/writing
+    pub fn stream_mut(&mut self) -> Option<&mut TcpStream> {
+        self.stream.as_mut()
+    }
+
+    /// Get the framing mode
+    pub fn framing(&self) -> FramingMode {
+        self.config.framing
+    }
+
     /// Read a frame from the stream
     async fn read_frame(&mut self, buffer: &mut BytesMut) -> Result<Option<bytes::Bytes>> {
         match self.config.framing {
@@ -250,12 +313,14 @@ impl TcpClient {
     }
 
     /// Read an XML-delimited frame (for TAK CoT messages)
-    /// TAK messages are XML documents ending with '>'
+    /// TAK Protocol: Messages are delimited by the "</event>" token
+    /// Per TAK spec: "Messages are delimited and broken apart by searching for
+    /// the token '</event>' and breaking apart immediately after that token."
     pub async fn read_xml_frame(
         &mut self,
         buffer: &mut BytesMut,
     ) -> Result<Option<bytes::Bytes>> {
-        const XML_END: u8 = b'>';
+        const XML_END_TOKEN: &[u8] = b"</event>";
 
         let stream = self
             .stream
@@ -263,19 +328,24 @@ impl TcpClient {
             .ok_or_else(|| anyhow!("Not connected"))?;
 
         loop {
-            // Check if we have a complete XML frame in the buffer (ending with '>')
-            if let Some(pos) = buffer.iter().position(|&b| b == XML_END) {
-                let frame = buffer.split_to(pos + 1);
-                let frame_bytes = frame.freeze();
+            // Search for the complete </event> token
+            if buffer.len() >= XML_END_TOKEN.len() {
+                if let Some(pos) = buffer.windows(XML_END_TOKEN.len())
+                    .position(|window| window == XML_END_TOKEN)
+                {
+                    // Split immediately after the </event> token
+                    let frame = buffer.split_to(pos + XML_END_TOKEN.len());
+                    let frame_bytes = frame.freeze();
 
-                // Validate that it looks like XML (starts with '<')
-                if frame_bytes.is_empty() || frame_bytes[0] != b'<' {
-                    // Skip invalid data until we find a '<'
-                    continue;
+                    // Validate that it looks like XML (starts with '<')
+                    if frame_bytes.is_empty() || frame_bytes[0] != b'<' {
+                        warn!("Received data not starting with '<', skipping invalid frame");
+                        continue;
+                    }
+
+                    self.status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                    return Ok(Some(frame_bytes));
                 }
-
-                self.status.metrics().record_bytes_received(frame_bytes.len() as u64);
-                return Ok(Some(frame_bytes));
             }
 
             // Check buffer size limit
@@ -300,6 +370,11 @@ impl TcpClient {
                 }
             }
         }
+    }
+
+    /// Write a frame to the stream (public method for direct access)
+    pub async fn write_frame_direct(&mut self, data: &[u8]) -> Result<()> {
+        self.write_frame(data).await
     }
 
     /// Write a frame to the stream
@@ -372,6 +447,7 @@ impl TcpClient {
         let tx = self.recv_tx.as_ref().unwrap().clone();
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
         self.shutdown_tx = Some(shutdown_tx);
+        let framing = self.config.framing;
 
         // Move the stream out for the task
         if let Some(mut stream) = self.stream.take() {
@@ -382,7 +458,7 @@ impl TcpClient {
                             debug!("Receive task shutting down");
                             break;
                         }
-                        result = Self::read_frame_static(&mut stream, &mut buffer, &status) => {
+                        result = Self::read_frame_static(&mut stream, &mut buffer, &status, framing) => {
                             match result {
                                 Ok(Some(frame)) => {
                                     status.metrics().record_message_received();
@@ -419,36 +495,124 @@ impl TcpClient {
     }
 
     /// Static helper for reading frames (used in async task)
-    async fn read_frame_static(
+    pub async fn read_frame_static(
         stream: &mut TcpStream,
         buffer: &mut BytesMut,
         status: &ConnectionStatus,
+        framing: FramingMode,
     ) -> Result<Option<bytes::Bytes>> {
-        // Simplified read for the task - always use newline for now
-        loop {
-            if let Some(pos) = buffer.iter().position(|&b| b == NEWLINE_DELIMITER) {
-                let frame = buffer.split_to(pos + 1);
-                let mut frame_bytes = frame.freeze();
+        match framing {
+            FramingMode::Newline => {
+                loop {
+                    if let Some(pos) = buffer.iter().position(|&b| b == NEWLINE_DELIMITER) {
+                        let frame = buffer.split_to(pos + 1);
+                        let mut frame_bytes = frame.freeze();
 
-                if frame_bytes.last() == Some(&NEWLINE_DELIMITER) {
-                    frame_bytes.truncate(frame_bytes.len() - 1);
+                        if frame_bytes.last() == Some(&NEWLINE_DELIMITER) {
+                            frame_bytes.truncate(frame_bytes.len() - 1);
+                        }
+
+                        status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                        return Ok(Some(frame_bytes));
+                    }
+
+                    if buffer.len() >= MAX_FRAME_SIZE {
+                        return Err(anyhow!("Frame too large"));
+                    }
+
+                    let n = stream.read_buf(buffer).await.context("Read error")?;
+
+                    if n == 0 {
+                        if buffer.is_empty() {
+                            return Ok(None);
+                        } else {
+                            return Err(anyhow!("Connection closed with incomplete frame"));
+                        }
+                    }
                 }
-
-                status.metrics().record_bytes_received(frame_bytes.len() as u64);
-                return Ok(Some(frame_bytes));
             }
+            FramingMode::LengthPrefixed => {
+                loop {
+                    // Check if we have at least 4 bytes for the length header
+                    if buffer.len() >= 4 {
+                        let mut length_bytes = [0u8; 4];
+                        length_bytes.copy_from_slice(&buffer[..4]);
+                        let frame_length = u32::from_be_bytes(length_bytes) as usize;
 
-            if buffer.len() >= MAX_FRAME_SIZE {
-                return Err(anyhow!("Frame too large"));
+                        // Validate frame length
+                        if frame_length > MAX_FRAME_SIZE {
+                            return Err(anyhow!("Frame length {} exceeds maximum", frame_length));
+                        }
+
+                        // Check if we have the complete frame
+                        if buffer.len() >= 4 + frame_length {
+                            buffer.advance(4); // Skip length header
+                            let frame = buffer.split_to(frame_length).freeze();
+                            status.metrics().record_bytes_received(frame.len() as u64);
+                            return Ok(Some(frame));
+                        }
+                    }
+
+                    // Check buffer size limit
+                    if buffer.len() >= MAX_FRAME_SIZE + 4 {
+                        return Err(anyhow!("Frame too large"));
+                    }
+
+                    let n = stream.read_buf(buffer).await.context("Read error")?;
+
+                    if n == 0 {
+                        if buffer.is_empty() {
+                            return Ok(None);
+                        } else {
+                            return Err(anyhow!("Connection closed with incomplete frame"));
+                        }
+                    }
+                }
             }
+            FramingMode::Xml => {
+                // TAK Protocol: Messages are delimited by searching for "</event>" token
+                // Per TAK spec: "Messages are delimited and broken apart by searching for
+                // the token '</event>' and breaking apart immediately after that token."
+                const XML_END_TOKEN: &[u8] = b"</event>";
 
-            let n = stream.read_buf(buffer).await.context("Read error")?;
+                loop {
+                    // Search for the complete </event> token
+                    if buffer.len() >= XML_END_TOKEN.len() {
+                        // Look for the </event> token in the buffer
+                        if let Some(pos) = buffer.windows(XML_END_TOKEN.len())
+                            .position(|window| window == XML_END_TOKEN)
+                        {
+                            // Split immediately after the </event> token
+                            let frame = buffer.split_to(pos + XML_END_TOKEN.len());
+                            let frame_bytes = frame.freeze();
 
-            if n == 0 {
-                if buffer.is_empty() {
-                    return Ok(None);
-                } else {
-                    return Err(anyhow!("Connection closed with incomplete frame"));
+                            // Validate that it looks like XML (starts with '<')
+                            // Most CoT messages start with <?xml but some may start directly with <event>
+                            if frame_bytes.is_empty() || frame_bytes[0] != b'<' {
+                                // Skip invalid data - continue reading
+                                warn!("Received data not starting with '<', skipping invalid frame");
+                                continue;
+                            }
+
+                            status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                            return Ok(Some(frame_bytes));
+                        }
+                    }
+
+                    // Check buffer size limit
+                    if buffer.len() >= MAX_FRAME_SIZE {
+                        return Err(anyhow!("XML frame too large"));
+                    }
+
+                    let n = stream.read_buf(buffer).await.context("Read error")?;
+
+                    if n == 0 {
+                        if buffer.is_empty() {
+                            return Ok(None);
+                        } else {
+                            return Err(anyhow!("Connection closed with incomplete XML frame"));
+                        }
+                    }
                 }
             }
         }

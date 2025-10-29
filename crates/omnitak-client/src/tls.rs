@@ -4,9 +4,9 @@ use crate::client::{
 use crate::state::{ConnectionState, ConnectionStatus};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use bytes::BytesMut;
+use bytes::{Buf, BytesMut};
 use omnitak_cert::{CertificateBundle, CertificateData};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
+use rustls::pki_types::{CertificateDer, ServerName};
 use rustls::{ClientConfig as RustlsConfig, RootCertStore};
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -25,6 +25,17 @@ const NEWLINE_DELIMITER: u8 = b'\n';
 
 /// Maximum frame size (10MB)
 const MAX_FRAME_SIZE: usize = 10 * 1024 * 1024;
+
+/// Protocol framing mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FramingMode {
+    /// Newline-delimited frames
+    Newline,
+    /// Length-prefixed frames (4-byte big-endian length header)
+    LengthPrefixed,
+    /// XML-delimited frames (read until '</event>' character for TAK CoT messages)
+    Xml,
+}
 
 /// TLS certificate source - either from files or in-memory data
 #[derive(Debug, Clone)]
@@ -74,6 +85,8 @@ pub struct TlsClientConfig {
     pub tls13_only: bool,
     /// Verify server certificate (should always be true in production)
     pub verify_server: bool,
+    /// Framing mode for protocol messages
+    pub framing: FramingMode,
 }
 
 impl TlsClientConfig {
@@ -89,8 +102,9 @@ impl TlsClientConfig {
                 },
             },
             server_name: None,
-            tls13_only: true,
+            tls13_only: false,  // Support both TLS 1.2 and 1.3 for TAK server compatibility
             verify_server: true,
+            framing: FramingMode::Xml, // Default to XML for TAK servers
         }
     }
 
@@ -112,8 +126,9 @@ impl TlsClientConfig {
                 },
             },
             server_name: None,
-            tls13_only: true,
+            tls13_only: false,  // Support both TLS 1.2 and 1.3 for TAK server compatibility
             verify_server: true,
+            framing: FramingMode::Xml, // Default to XML for TAK servers
         }
     }
 
@@ -125,14 +140,15 @@ impl TlsClientConfig {
                 source: TlsCertSource::Bundle(bundle),
             },
             server_name: None,
-            tls13_only: true,
+            tls13_only: false,  // Support both TLS 1.2 and 1.3 for TAK server compatibility
             verify_server: true,
+            framing: FramingMode::Xml, // Default to XML for TAK servers
         }
     }
 
     /// Set CA certificate path (only for file-based config)
     pub fn with_ca_cert(mut self, ca_cert_path: PathBuf) -> Self {
-        if let TlsCertSource::Files { ref mut ca_cert_path: ca, .. } = self.cert_config.source {
+        if let TlsCertSource::Files { ca_cert_path: ref mut ca, .. } = self.cert_config.source {
             *ca = Some(ca_cert_path);
         }
         self
@@ -356,8 +372,85 @@ impl TlsClient {
         Ok(())
     }
 
-    /// Read a newline-delimited frame from the TLS stream
+    /// Connect to the server without starting the receive task
+    /// This is useful when you want to manually manage reading and writing
+    pub async fn connect_only(&mut self) -> Result<()> {
+        let config = self.config.base.reconnect.clone();
+
+        // Inline retry logic to avoid closure capture issues
+        let result = if !config.enabled {
+            self.establish_connection().await
+        } else {
+            let mut attempt = 0u32;
+            loop {
+                match self.establish_connection().await {
+                    Ok(()) => {
+                        if attempt > 0 {
+                            info!(
+                                attempt = attempt,
+                                "Successfully reconnected after {} attempts",
+                                attempt
+                            );
+                        }
+                        break Ok(());
+                    }
+                    Err(e) => {
+                        attempt += 1;
+
+                        if let Some(max) = config.max_attempts {
+                            if attempt >= max {
+                                error!(
+                                    attempt = attempt,
+                                    error = %e,
+                                    "Max reconnect attempts reached"
+                                );
+                                break Err(e);
+                            }
+                        }
+
+                        let backoff = calculate_backoff(attempt - 1, &config);
+                        warn!(
+                            attempt = attempt,
+                            backoff_secs = backoff.as_secs(),
+                            error = %e,
+                            "Connection attempt failed, retrying after backoff"
+                        );
+
+                        tokio::time::sleep(backoff).await;
+                    }
+                }
+            }
+        };
+
+        result
+    }
+
+    /// Get a mutable reference to the stream for manual reading/writing
+    pub fn stream_mut(&mut self) -> Option<&mut TlsStream<TcpStream>> {
+        self.stream.as_mut()
+    }
+
+    /// Get the framing mode
+    pub fn framing(&self) -> FramingMode {
+        self.config.framing
+    }
+
+    /// Write a frame to the stream (public method for direct access)
+    pub async fn write_frame_direct(&mut self, data: &[u8]) -> Result<()> {
+        self.write_frame(data).await
+    }
+
+    /// Read a frame from the TLS stream
     async fn read_frame(&mut self, buffer: &mut BytesMut) -> Result<Option<bytes::Bytes>> {
+        match self.config.framing {
+            FramingMode::Newline => self.read_newline_frame(buffer).await,
+            FramingMode::LengthPrefixed => self.read_length_prefixed_frame(buffer).await,
+            FramingMode::Xml => self.read_xml_frame(buffer).await,
+        }
+    }
+
+    /// Read a newline-delimited frame from the TLS stream
+    async fn read_newline_frame(&mut self, buffer: &mut BytesMut) -> Result<Option<bytes::Bytes>> {
         let stream = self
             .stream
             .as_mut()
@@ -402,6 +495,115 @@ impl TlsClient {
         }
     }
 
+    /// Read a length-prefixed frame from the TLS stream
+    async fn read_length_prefixed_frame(&mut self, buffer: &mut BytesMut) -> Result<Option<bytes::Bytes>> {
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or_else(|| anyhow!("Not connected"))?;
+
+        loop {
+            // Check if we have at least 4 bytes for the length header
+            if buffer.len() >= 4 {
+                let mut length_bytes = [0u8; 4];
+                length_bytes.copy_from_slice(&buffer[..4]);
+                let frame_length = u32::from_be_bytes(length_bytes) as usize;
+
+                // Validate frame length
+                if frame_length > MAX_FRAME_SIZE {
+                    return Err(anyhow!("Frame length {} exceeds maximum", frame_length));
+                }
+
+                // Check if we have the complete frame
+                if buffer.len() >= 4 + frame_length {
+                    buffer.advance(4); // Skip length header
+                    let frame = buffer.split_to(frame_length).freeze();
+                    self.status.metrics().record_bytes_received(frame.len() as u64);
+                    return Ok(Some(frame));
+                }
+            }
+
+            // Check buffer size limit
+            if buffer.len() >= MAX_FRAME_SIZE + 4 {
+                return Err(anyhow!("Frame too large"));
+            }
+
+            // Read more data
+            let read_result = timeout(
+                self.config.base.read_timeout,
+                stream.read_buf(buffer),
+            )
+            .await
+            .context("Read timeout")?
+            .context("Read error")?;
+
+            if read_result == 0 {
+                if buffer.is_empty() {
+                    return Ok(None); // Clean disconnect
+                } else {
+                    return Err(anyhow!("Connection closed with incomplete frame"));
+                }
+            }
+        }
+    }
+
+    /// Read an XML-delimited frame from the TLS stream (for TAK CoT messages)
+    /// TAK Protocol: Messages are delimited by the "</event>" token
+    /// Per TAK spec: "Messages are delimited and broken apart by searching for
+    /// the token '</event>' and breaking apart immediately after that token."
+    async fn read_xml_frame(&mut self, buffer: &mut BytesMut) -> Result<Option<bytes::Bytes>> {
+        const XML_END_TOKEN: &[u8] = b"</event>";
+
+        let stream = self
+            .stream
+            .as_mut()
+            .ok_or_else(|| anyhow!("Not connected"))?;
+
+        loop {
+            // Search for the complete </event> token
+            if buffer.len() >= XML_END_TOKEN.len() {
+                if let Some(pos) = buffer.windows(XML_END_TOKEN.len())
+                    .position(|window| window == XML_END_TOKEN)
+                {
+                    // Split immediately after the </event> token
+                    let frame = buffer.split_to(pos + XML_END_TOKEN.len());
+                    let frame_bytes = frame.freeze();
+
+                    // Validate that it looks like XML (starts with '<')
+                    if frame_bytes.is_empty() || frame_bytes[0] != b'<' {
+                        warn!("Received data not starting with '<', skipping invalid frame");
+                        continue;
+                    }
+
+                    self.status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                    return Ok(Some(frame_bytes));
+                }
+            }
+
+            // Check buffer size limit
+            if buffer.len() >= MAX_FRAME_SIZE {
+                return Err(anyhow!("XML frame too large"));
+            }
+
+            // Read more data
+            let read_result = timeout(
+                self.config.base.read_timeout,
+                stream.read_buf(buffer),
+            )
+            .await
+            .context("Read timeout")?
+            .context("Read error")?;
+
+            if read_result == 0 {
+                if buffer.is_empty() {
+                    return Ok(None); // Clean disconnect
+                } else {
+                    return Err(anyhow!("Connection closed with incomplete XML frame"));
+                }
+            }
+        }
+    }
+
     /// Write a frame to the TLS stream
     async fn write_frame(&mut self, data: &[u8]) -> Result<()> {
         let stream = self
@@ -409,21 +611,55 @@ impl TlsClient {
             .as_mut()
             .ok_or_else(|| anyhow!("Not connected"))?;
 
-        timeout(
-            self.config.base.write_timeout,
-            stream.write_all(data),
-        )
-        .await
-        .context("Write timeout")?
-        .context("Write error")?;
+        match self.config.framing {
+            FramingMode::Newline => {
+                timeout(
+                    self.config.base.write_timeout,
+                    stream.write_all(data),
+                )
+                .await
+                .context("Write timeout")?
+                .context("Write error")?;
 
-        timeout(
-            self.config.base.write_timeout,
-            stream.write_all(&[NEWLINE_DELIMITER]),
-        )
-        .await
-        .context("Write timeout")?
-        .context("Write error")?;
+                timeout(
+                    self.config.base.write_timeout,
+                    stream.write_all(&[NEWLINE_DELIMITER]),
+                )
+                .await
+                .context("Write timeout")?
+                .context("Write error")?;
+            }
+            FramingMode::LengthPrefixed => {
+                let length = data.len() as u32;
+                let length_bytes = length.to_be_bytes();
+
+                timeout(
+                    self.config.base.write_timeout,
+                    stream.write_all(&length_bytes),
+                )
+                .await
+                .context("Write timeout")?
+                .context("Write error")?;
+
+                timeout(
+                    self.config.base.write_timeout,
+                    stream.write_all(data),
+                )
+                .await
+                .context("Write timeout")?
+                .context("Write error")?;
+            }
+            FramingMode::Xml => {
+                // For XML framing, write the data as-is (should already be complete XML)
+                timeout(
+                    self.config.base.write_timeout,
+                    stream.write_all(data),
+                )
+                .await
+                .context("Write timeout")?
+                .context("Write error")?;
+            }
+        }
 
         stream.flush().await.context("Flush error")?;
         self.status.metrics().record_bytes_sent(data.len() as u64);
@@ -438,6 +674,7 @@ impl TlsClient {
         let tx = self.recv_tx.as_ref().unwrap().clone();
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
         self.shutdown_tx = Some(shutdown_tx);
+        let framing = self.config.framing;
 
         // Move the stream out for the task
         if let Some(mut stream) = self.stream.take() {
@@ -448,7 +685,7 @@ impl TlsClient {
                             debug!("TLS receive task shutting down");
                             break;
                         }
-                        result = Self::read_frame_static(&mut stream, &mut buffer, &status) => {
+                        result = Self::read_frame_static(&mut stream, &mut buffer, &status, framing) => {
                             match result {
                                 Ok(Some(frame)) => {
                                     status.metrics().record_message_received();
@@ -485,35 +722,124 @@ impl TlsClient {
     }
 
     /// Static helper for reading frames (used in async task)
-    async fn read_frame_static(
+    pub async fn read_frame_static(
         stream: &mut TlsStream<TcpStream>,
         buffer: &mut BytesMut,
         status: &ConnectionStatus,
+        framing: FramingMode,
     ) -> Result<Option<bytes::Bytes>> {
-        loop {
-            if let Some(pos) = buffer.iter().position(|&b| b == NEWLINE_DELIMITER) {
-                let frame = buffer.split_to(pos + 1);
-                let mut frame_bytes = frame.freeze();
+        match framing {
+            FramingMode::Newline => {
+                loop {
+                    if let Some(pos) = buffer.iter().position(|&b| b == NEWLINE_DELIMITER) {
+                        let frame = buffer.split_to(pos + 1);
+                        let mut frame_bytes = frame.freeze();
 
-                if frame_bytes.last() == Some(&NEWLINE_DELIMITER) {
-                    frame_bytes.truncate(frame_bytes.len() - 1);
+                        if frame_bytes.last() == Some(&NEWLINE_DELIMITER) {
+                            frame_bytes.truncate(frame_bytes.len() - 1);
+                        }
+
+                        status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                        return Ok(Some(frame_bytes));
+                    }
+
+                    if buffer.len() >= MAX_FRAME_SIZE {
+                        return Err(anyhow!("Frame too large"));
+                    }
+
+                    let n = stream.read_buf(buffer).await.context("Read error")?;
+
+                    if n == 0 {
+                        if buffer.is_empty() {
+                            return Ok(None);
+                        } else {
+                            return Err(anyhow!("Connection closed with incomplete frame"));
+                        }
+                    }
                 }
-
-                status.metrics().record_bytes_received(frame_bytes.len() as u64);
-                return Ok(Some(frame_bytes));
             }
+            FramingMode::LengthPrefixed => {
+                loop {
+                    // Check if we have at least 4 bytes for the length header
+                    if buffer.len() >= 4 {
+                        let mut length_bytes = [0u8; 4];
+                        length_bytes.copy_from_slice(&buffer[..4]);
+                        let frame_length = u32::from_be_bytes(length_bytes) as usize;
 
-            if buffer.len() >= MAX_FRAME_SIZE {
-                return Err(anyhow!("Frame too large"));
+                        // Validate frame length
+                        if frame_length > MAX_FRAME_SIZE {
+                            return Err(anyhow!("Frame length {} exceeds maximum", frame_length));
+                        }
+
+                        // Check if we have the complete frame
+                        if buffer.len() >= 4 + frame_length {
+                            buffer.advance(4); // Skip length header
+                            let frame = buffer.split_to(frame_length).freeze();
+                            status.metrics().record_bytes_received(frame.len() as u64);
+                            return Ok(Some(frame));
+                        }
+                    }
+
+                    // Check buffer size limit
+                    if buffer.len() >= MAX_FRAME_SIZE + 4 {
+                        return Err(anyhow!("Frame too large"));
+                    }
+
+                    let n = stream.read_buf(buffer).await.context("Read error")?;
+
+                    if n == 0 {
+                        if buffer.is_empty() {
+                            return Ok(None);
+                        } else {
+                            return Err(anyhow!("Connection closed with incomplete frame"));
+                        }
+                    }
+                }
             }
+            FramingMode::Xml => {
+                // TAK Protocol: Messages are delimited by searching for "</event>" token
+                // Per TAK spec: "Messages are delimited and broken apart by searching for
+                // the token '</event>' and breaking apart immediately after that token."
+                const XML_END_TOKEN: &[u8] = b"</event>";
 
-            let n = stream.read_buf(buffer).await.context("Read error")?;
+                loop {
+                    // Search for the complete </event> token
+                    if buffer.len() >= XML_END_TOKEN.len() {
+                        // Look for the </event> token in the buffer
+                        if let Some(pos) = buffer.windows(XML_END_TOKEN.len())
+                            .position(|window| window == XML_END_TOKEN)
+                        {
+                            // Split immediately after the </event> token
+                            let frame = buffer.split_to(pos + XML_END_TOKEN.len());
+                            let frame_bytes = frame.freeze();
 
-            if n == 0 {
-                if buffer.is_empty() {
-                    return Ok(None);
-                } else {
-                    return Err(anyhow!("Connection closed with incomplete frame"));
+                            // Validate that it looks like XML (starts with '<')
+                            // Most CoT messages start with <?xml but some may start directly with <event>
+                            if frame_bytes.is_empty() || frame_bytes[0] != b'<' {
+                                // Skip invalid data - continue reading
+                                warn!("Received data not starting with '<', skipping invalid frame");
+                                continue;
+                            }
+
+                            status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                            return Ok(Some(frame_bytes));
+                        }
+                    }
+
+                    // Check buffer size limit
+                    if buffer.len() >= MAX_FRAME_SIZE {
+                        return Err(anyhow!("XML frame too large"));
+                    }
+
+                    let n = stream.read_buf(buffer).await.context("Read error")?;
+
+                    if n == 0 {
+                        if buffer.is_empty() {
+                            return Ok(None);
+                        } else {
+                            return Err(anyhow!("Connection closed with incomplete XML frame"));
+                        }
+                    }
                 }
             }
         }
@@ -656,12 +982,18 @@ mod tests {
     #[test]
     fn test_tls_cert_config() {
         let config = TlsCertConfig {
-            cert_path: PathBuf::from("/path/to/cert.pem"),
-            key_path: PathBuf::from("/path/to/key.pem"),
-            ca_cert_path: None,
+            source: TlsCertSource::Files {
+                cert_path: PathBuf::from("/path/to/cert.pem"),
+                key_path: PathBuf::from("/path/to/key.pem"),
+                ca_cert_path: None,
+            },
         };
 
-        assert_eq!(config.cert_path, PathBuf::from("/path/to/cert.pem"));
+        if let TlsCertSource::Files { cert_path, .. } = &config.source {
+            assert_eq!(cert_path, &PathBuf::from("/path/to/cert.pem"));
+        } else {
+            panic!("Expected Files variant");
+        }
     }
 
     #[test]
@@ -674,5 +1006,13 @@ mod tests {
 
         assert_eq!(config.server_name, Some("example.com".to_string()));
         assert!(config.tls13_only);
+        assert_eq!(config.framing, FramingMode::Xml);
+    }
+
+    #[test]
+    fn test_framing_mode() {
+        assert_eq!(FramingMode::Xml, FramingMode::Xml);
+        assert_ne!(FramingMode::Newline, FramingMode::Xml);
+        assert_ne!(FramingMode::LengthPrefixed, FramingMode::Xml);
     }
 }

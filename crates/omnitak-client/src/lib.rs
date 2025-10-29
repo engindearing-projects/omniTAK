@@ -53,6 +53,10 @@ pub use client::{
 };
 pub use state::{ConnectionMetrics, ConnectionState, ConnectionStatus, MetricsSnapshot};
 
+// Re-export FramingMode from both tcp and tls for convenience
+pub use tcp::FramingMode as TcpFramingMode;
+pub use tls::FramingMode as TlsFramingMode;
+
 // Re-export bytes for convenience
 pub use bytes::{Bytes, BytesMut};
 
