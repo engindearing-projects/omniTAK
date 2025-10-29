@@ -81,7 +81,7 @@ pub struct SystemStatus {
 // Connection Management
 // ============================================================================
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ConnectionInfo {
     /// Unique connection identifier
     pub id: Uuid,
@@ -129,7 +129,7 @@ pub struct ConnectionList {
     pub total: usize,
 }
 
-#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Validate, ToSchema)]
 pub struct CreateConnectionRequest {
     /// Connection name/label
     #[validate(length(min = 1, max = 100))]
@@ -252,7 +252,7 @@ pub struct FilterList {
     pub total: usize,
 }
 
-#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Validate, ToSchema)]
 pub struct CreateFilterRequest {
     /// Filter name/description
     #[validate(length(min = 1, max = 200))]
@@ -342,7 +342,7 @@ pub struct LoginResponse {
     pub role: UserRole,
 }
 
-#[derive(Debug, Deserialize, Validate, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Validate, ToSchema)]
 pub struct ApiKeyRequest {
     /// API key name/description
     #[validate(length(min = 1, max = 200))]

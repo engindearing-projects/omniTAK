@@ -39,7 +39,8 @@ pub mod static_files;
 pub mod types;
 pub mod websocket;
 
-use auth::{AuthConfig, AuthService, UserRole};
+use auth::{AuthConfig, AuthService, AuthUser};
+use types::UserRole;
 use middleware::{
     cors_layer, logging_middleware, rate_limit_middleware, request_id_middleware,
     security_headers_middleware, timeout_middleware, RateLimitState, ReadinessState,
@@ -51,6 +52,7 @@ use omnitak_pool::{
 use rest::ApiState;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::signal;
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
@@ -278,26 +280,32 @@ impl Server {
         let pool_config = PoolConfig {
             max_connections: 1000,
             channel_capacity: 1024,
-            enable_metrics: true,
+            health_check_interval: Duration::from_secs(30),
+            inactive_timeout: Duration::from_secs(300),
+            auto_reconnect: true,
         };
         let pool = Arc::new(ConnectionPool::new(pool_config));
 
         // Initialize message distributor
         info!("Initializing message distributor");
         let distributor_config = DistributorConfig {
-            strategy: DistributionStrategy::Multicast,
-            max_filters: 1000,
-            enable_metrics: true,
+            strategy: DistributionStrategy::DropOnFull,
+            channel_capacity: 1024,
+            max_workers: 4,
+            batch_size: 10,
+            flush_interval: Duration::from_millis(100),
         };
-        let distributor = Arc::new(MessageDistributor::new(distributor_config));
+        let distributor = Arc::new(MessageDistributor::new(pool.clone(), distributor_config));
 
         // Initialize message aggregator (for future use)
         let aggregator_config = AggregatorConfig {
-            deduplication_window_secs: 60,
-            cache_size: 10000,
-            enable_metrics: true,
+            dedup_window: Duration::from_secs(60),
+            max_cache_entries: 10000,
+            cleanup_interval: Duration::from_secs(30),
+            channel_capacity: 1024,
+            worker_count: 4,
         };
-        let _aggregator = Arc::new(MessageAggregator::new(aggregator_config));
+        let _aggregator = Arc::new(MessageAggregator::new(distributor.clone(), aggregator_config));
 
         // Create application state
         let api_state = ApiState {

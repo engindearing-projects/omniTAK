@@ -8,11 +8,14 @@ use argon2::{
 };
 use axum::{
     async_trait,
-    extract::{FromRequestParts, TypedHeader},
-    headers::{authorization::Bearer, Authorization},
+    extract::FromRequestParts,
     http::{request::Parts, StatusCode},
     response::{IntoResponse, Response},
     Json, RequestPartsExt,
+};
+use axum_extra::{
+    headers::{authorization::Bearer, Authorization},
+    TypedHeader,
 };
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
@@ -118,7 +121,7 @@ pub struct ApiKey {
 
 pub struct AuthService {
     config: AuthConfig,
-    users: Arc<DashMap<String, User>>,
+    pub users: Arc<DashMap<String, User>>,
     api_keys: Arc<DashMap<String, ApiKey>>,
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
@@ -152,7 +155,7 @@ impl AuthService {
     /// Verify a password against a hash
     pub fn verify_password(&self, password: &str, hash: &str) -> Result<bool> {
         let parsed_hash =
-            PasswordHash::new(hash).context("Failed to parse password hash")?;
+            PasswordHash::new(hash).map_err(|e| anyhow::anyhow!("Failed to parse password hash: {}", e))?;
         let argon2 = Argon2::default();
         Ok(argon2
             .verify_password(password.as_bytes(), &parsed_hash)
@@ -275,11 +278,13 @@ impl AuthService {
             // Verify the key
             if self.verify_password(api_key, &key_record.key_hash)? {
                 // Update last used timestamp
+                let key_hash = key_record.key_hash.clone();
+                let role = key_record.role;
                 drop(entry);
-                if let Some(mut key) = self.api_keys.get_mut(&key_record.key_hash) {
+                if let Some(mut key) = self.api_keys.get_mut(&key_hash) {
                     key.last_used = Some(Utc::now());
                 }
-                return Ok(key_record.role);
+                return Ok(role);
             }
         }
 

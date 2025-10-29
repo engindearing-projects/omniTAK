@@ -12,12 +12,12 @@ use axum::{
 };
 use chrono::Utc;
 use std::net::SocketAddr;
-use omnitak_pool::{ConnectionPool, MessageDistributor, PoolMessage, FilterRule};
+use omnitak_pool::{ConnectionPool, MessageDistributor, PoolMessage, FilterRule as PoolFilterRule};
 use omnitak_client::{
     ClientConfig, CotMessage, ReconnectConfig, TakClient,
     tcp::{TcpClient, TcpClientConfig, FramingMode},
     tls::{TlsClient, TlsClientConfig},
-    Bytes,
+    Bytes, BytesMut,
 };
 use serde::Deserialize;
 use std::sync::Arc;
@@ -259,7 +259,7 @@ async fn create_connection(
     let pool_rx = connection.rx.clone();
 
     // Add filter for this connection
-    state.distributor.add_filter(id_str.clone(), FilterRule::AlwaysSend);
+    state.distributor.add_filter(id_str.clone(), PoolFilterRule::AlwaysSend);
 
     // Spawn client task based on connection type
     let address_clone = address_with_port.clone();
@@ -297,15 +297,15 @@ async fn create_connection(
             tokio::spawn(async move {
                 info!(id = %id_clone, "Connecting TCP client");
 
-                if let Err(e) = client.connect().await {
+                if let Err(e) = client.connect_only().await {
                     error!(id = %id_clone, error = %e, "Failed to connect TCP client");
                     return;
                 }
 
                 info!(id = %id_clone, address = %address_clone, "TCP client connected");
 
-                let mut recv_stream = client.receive_cot();
                 let client_arc = Arc::new(tokio::sync::Mutex::new(client));
+                let client_read = Arc::clone(&client_arc);
                 let client_write = Arc::clone(&client_arc);
 
                 let id_read = id_clone.clone();
@@ -313,14 +313,39 @@ async fn create_connection(
 
                 // Read task (TAK server → Pool)
                 let read_task = tokio::spawn(async move {
-                    while let Some(result) = recv_stream.next().await {
+                    let mut buffer = BytesMut::with_capacity(8192);
+
+                    loop {
+                        let result = {
+                            let mut client = client_read.lock().await;
+
+                            // Clone immutable data first (ConnectionStatus is cheap to clone)
+                            let status = client.status().clone();
+                            let framing = client.framing();
+
+                            // Then get mutable reference to stream
+                            let stream = match client.stream_mut() {
+                                Some(s) => s,
+                                None => {
+                                    error!(id = %id_read, "Stream not available");
+                                    break;
+                                }
+                            };
+
+                            TcpClient::read_frame_static(stream, &mut buffer, &status, framing).await
+                        };
+
                         match result {
-                            Ok(cot_msg) => {
-                                info!(id = %id_read, bytes = cot_msg.data.len(), "Received CoT message");
-                                if let Err(e) = pool_tx.send_async(PoolMessage::Cot(cot_msg.data.to_vec())).await {
+                            Ok(Some(frame)) => {
+                                info!(id = %id_read, bytes = frame.len(), "Received CoT message");
+                                if let Err(e) = pool_tx.send_async(PoolMessage::Cot(frame.to_vec())).await {
                                     error!(id = %id_read, error = %e, "Failed to send to pool");
                                     break;
                                 }
+                            }
+                            Ok(None) => {
+                                info!(id = %id_read, "Connection closed by remote");
+                                break;
                             }
                             Err(e) => {
                                 error!(id = %id_read, error = %e, "Error reading from TAK server");
@@ -336,12 +361,8 @@ async fn create_connection(
                     loop {
                         match pool_rx.recv_async().await {
                             Ok(PoolMessage::Cot(data)) => {
-                                let cot_msg = CotMessage {
-                                    data: Bytes::from(data),
-                                    metadata: Default::default(),
-                                };
                                 let mut client = client_write.lock().await;
-                                if let Err(e) = client.send_cot(cot_msg).await {
+                                if let Err(e) = client.write_frame_direct(&data).await {
                                     error!(id = %id_write, error = %e, "Failed to send to TAK server");
                                     break;
                                 }
@@ -370,9 +391,9 @@ async fn create_connection(
             info!(id = %connection_id, "Creating TLS client");
 
             // Validate TLS cert paths are provided
-            let cert_path = request.tls_cert_path
+            let cert_path = request.tls_cert_path.clone()
                 .ok_or_else(|| ApiError::BadRequest("TLS certificate path required for TLS connection".to_string()))?;
-            let key_path = request.tls_key_path
+            let key_path = request.tls_key_path.clone()
                 .ok_or_else(|| ApiError::BadRequest("TLS key path required for TLS connection".to_string()))?;
 
             let mut client_config = TlsClientConfig::new(
@@ -400,29 +421,57 @@ async fn create_connection(
             tokio::spawn(async move {
                 info!(id = %id_clone, "Connecting TLS client");
 
-                if let Err(e) = client.connect().await {
+                if let Err(e) = client.connect_only().await {
                     error!(id = %id_clone, error = %e, "Failed to connect TLS client");
                     return;
                 }
 
                 info!(id = %id_clone, address = %address_clone, "TLS client connected");
 
-                let mut recv_stream = client.receive_cot();
                 let client_arc = Arc::new(tokio::sync::Mutex::new(client));
+                let client_read = Arc::clone(&client_arc);
                 let client_write = Arc::clone(&client_arc);
 
                 let id_read = id_clone.clone();
                 let id_write = id_clone.clone();
 
+                // Read task (TAK server → Pool)
                 let read_task = tokio::spawn(async move {
-                    while let Some(result) = recv_stream.next().await {
+                    use omnitak_client::tls::TlsClient;
+
+                    let mut buffer = BytesMut::with_capacity(8192);
+
+                    loop {
+                        let result = {
+                            let mut client = client_read.lock().await;
+
+                            // Clone immutable data first (ConnectionStatus is cheap to clone)
+                            let status = client.status().clone();
+                            let framing = client.framing();
+
+                            // Then get mutable reference to stream
+                            let stream = match client.stream_mut() {
+                                Some(s) => s,
+                                None => {
+                                    error!(id = %id_read, "Stream not available");
+                                    break;
+                                }
+                            };
+
+                            TlsClient::read_frame_static(stream, &mut buffer, &status, framing).await
+                        };
+
                         match result {
-                            Ok(cot_msg) => {
-                                info!(id = %id_read, bytes = cot_msg.data.len(), "Received CoT message (TLS)");
-                                if let Err(e) = pool_tx.send_async(PoolMessage::Cot(cot_msg.data.to_vec())).await {
+                            Ok(Some(frame)) => {
+                                info!(id = %id_read, bytes = frame.len(), "Received CoT message (TLS)");
+                                if let Err(e) = pool_tx.send_async(PoolMessage::Cot(frame.to_vec())).await {
                                     error!(id = %id_read, error = %e, "Failed to send to pool");
                                     break;
                                 }
+                            }
+                            Ok(None) => {
+                                info!(id = %id_read, "Connection closed by remote");
+                                break;
                             }
                             Err(e) => {
                                 error!(id = %id_read, error = %e, "Error reading from TLS TAK server");
@@ -433,16 +482,13 @@ async fn create_connection(
                     info!(id = %id_read, "TLS read task terminated");
                 });
 
+                // Write task (Pool → TAK server)
                 let write_task = tokio::spawn(async move {
                     loop {
                         match pool_rx.recv_async().await {
                             Ok(PoolMessage::Cot(data)) => {
-                                let cot_msg = CotMessage {
-                                    data: Bytes::from(data),
-                                    metadata: Default::default(),
-                                };
                                 let mut client = client_write.lock().await;
-                                if let Err(e) = client.send_cot(cot_msg).await {
+                                if let Err(e) = client.write_frame_direct(&data).await {
                                     error!(id = %id_write, error = %e, "Failed to send to TLS TAK server");
                                     break;
                                 }
@@ -498,8 +544,8 @@ async fn create_connection(
 
     // Audit log with actual client IP
     state.audit_logger.log(
-        user.0.user_id.unwrap_or_else(|| "api_key".to_string()),
-        user.0.role,
+        user.user_id.unwrap_or_else(|| "api_key".to_string()),
+        user.role,
         "create_connection".to_string(),
         format!("/api/v1/connections/{}", connection_id),
         serde_json::to_value(&request).unwrap(),
@@ -560,15 +606,15 @@ async fn delete_connection(
     }
     drop(connections);
 
-    // Remove filter
-    state.distributor.remove_filter(&id_str);
+    // Remove filters
+    state.distributor.remove_filters(&id_str);
 
     info!(connection_id = %id, "Connection deleted successfully");
 
     // Audit log with actual client IP
     state.audit_logger.log(
-        user.0.user_id.unwrap_or_else(|| "api_key".to_string()),
-        user.0.role,
+        user.user_id.unwrap_or_else(|| "api_key".to_string()),
+        user.role,
         "delete_connection".to_string(),
         format!("/api/v1/connections/{}", id),
         serde_json::json!({"connection_id": id}),
@@ -616,7 +662,7 @@ async fn get_filter(
     State(_state): State<ApiState>,
     Path(id): Path<Uuid>,
     _user: AuthUser,
-) -> Result<Json<FilterRule>, ApiError> {
+) -> Result<Json<crate::types::FilterRule>, ApiError> {
     // TODO: Get actual filter from filter engine
     Err(ApiError::NotFound(format!("Filter {} not found", id)))
 }
@@ -657,8 +703,8 @@ async fn create_filter(
 
     // Audit log
     state.audit_logger.log(
-        user.0.user_id.unwrap_or_else(|| "api_key".to_string()),
-        user.0.role,
+        user.user_id.unwrap_or_else(|| "api_key".to_string()),
+        user.role,
         "create_filter".to_string(),
         format!("/api/v1/filters/{}", filter_id),
         serde_json::to_value(&request).unwrap(),
@@ -687,8 +733,8 @@ async fn delete_filter(
 
     // Audit log
     state.audit_logger.log(
-        user.0.user_id.unwrap_or_else(|| "api_key".to_string()),
-        user.0.role,
+        user.user_id.unwrap_or_else(|| "api_key".to_string()),
+        user.role,
         "delete_filter".to_string(),
         format!("/api/v1/filters/{}", id),
         serde_json::json!({"filter_id": id}),
@@ -818,8 +864,8 @@ async fn create_api_key(
 
     // Audit log
     state.audit_logger.log(
-        user.0.user_id.unwrap_or_else(|| "api_key".to_string()),
-        user.0.role,
+        user.user_id.unwrap_or_else(|| "api_key".to_string()),
+        user.role,
         "create_api_key".to_string(),
         format!("/api/v1/auth/api-keys/{}", key_id),
         serde_json::to_value(&request).unwrap(),
