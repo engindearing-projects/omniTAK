@@ -1,0 +1,135 @@
+# OmniTAK Configuration Example
+# Copy this file to config/config.yaml and customize for your environment
+
+application:
+  # Maximum concurrent connections to TAK servers
+  max_connections: 100
+
+  # Number of worker threads for message processing
+  worker_threads: 4
+
+# TAK Server Connections
+servers:
+  # Example: Official TAK Server with TLS 1.2 and client certificates
+  - id: tak-server-production
+    address: "takserver.example.com:8089"
+    protocol: tls
+    auto_reconnect: true
+    reconnect_delay_ms: 5000
+    tls:
+      # IMPORTANT: Use traditional RSA format keys (see README.md)
+      cert_path: "/path/to/certs/omnitak.pem"
+      key_path: "/path/to/certs/omnitak-rsa.key"  # Must be traditional RSA format!
+      ca_path: "/path/to/certs/ca.pem"
+      # Set to false if using self-signed certificates in testing
+      validate_certs: true
+
+  # Example: TAKy server with basic TCP
+  - id: taky-development
+    address: "192.168.1.100:8087"
+    protocol: tcp
+    auto_reconnect: true
+
+  # Example: UDP multicast
+  - id: tactical-multicast
+    address: "239.2.3.1:6969"
+    protocol: multicast
+    multicast_ttl: 5
+
+# Message Filtering Rules
+filters:
+  # Mode: whitelist (only allow specified) or blacklist (block specified)
+  mode: whitelist
+
+  rules:
+    # Allow friendly forces only
+    - id: friendly-only
+      type: affiliation
+      allow: [friend, assumedfriend]
+      destinations: [tak-server-production]
+
+    # Filter by geographic bounds
+    - id: operation-area
+      type: geographic
+      bounds:
+        min_lat: 34.0
+        max_lat: 35.0
+        min_lon: -119.0
+        max_lon: -118.0
+      destinations: [taky-development]
+
+    # Filter by team/group
+    - id: team-alpha
+      type: team
+      teams: ["Alpha", "Bravo"]
+      destinations: [tak-server-production]
+
+# REST API Configuration
+api:
+  # Bind address for the API server
+  bind_addr: "127.0.0.1:9443"
+
+  # Enable TLS for the API (recommended for production)
+  enable_tls: false
+
+  # API TLS certificates (if enable_tls is true)
+  # tls_cert_path: "/path/to/api-cert.pem"
+  # tls_key_path: "/path/to/api-key.pem"
+
+  # JWT token expiration (seconds)
+  jwt_expiration: 86400  # 24 hours
+
+  # Rate limiting (requests per second)
+  rate_limit_rps: 100
+
+  # Enable Swagger UI at /api-docs.html
+  enable_swagger: true
+
+  # Enable static file serving at /static
+  enable_static_files: true
+
+# Authentication
+auth:
+  # Default admin credentials (CHANGE THESE!)
+  admin_user: "admin"
+  admin_password: "changeme"  # Use environment variable OMNITAK_ADMIN_PASSWORD instead
+
+# Logging
+logging:
+  # Log level: trace, debug, info, warn, error
+  level: "info"
+
+  # Output format: text or json
+  format: "text"
+
+  # Log to file (optional)
+  # file: "/var/log/omnitak/omnitak.log"
+
+# Metrics (Prometheus-compatible)
+metrics:
+  enabled: true
+  # Endpoint: /api/v1/metrics
+
+# Performance Tuning
+performance:
+  # Message buffer size per connection
+  buffer_size: 8192
+
+  # Maximum message size (bytes)
+  max_message_size: 1048576  # 1 MB
+
+  # Connection timeout (seconds)
+  connection_timeout: 30
+
+  # Keep-alive interval (seconds)
+  keepalive_interval: 60
+
+# Security
+security:
+  # Enable audit logging
+  audit_logging: true
+
+  # Allowed CORS origins (for API)
+  cors_origins:
+    - "http://localhost:3000"
+    - "https://your-dashboard.example.com"

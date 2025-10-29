@@ -1,8 +1,16 @@
 # OmniTAK
 
-**Military-Grade TAK Server Aggregator**
+**Military-Grade TAK Server Aggregator** | **Status: Beta (v0.2.0)**
 
 OmniTAK is a high-performance, memory-safe TAK (Team Awareness Kit) server aggregator written in Rust. It acts as a multi-protocol client that connects to multiple TAK servers simultaneously, aggregates CoT (Cursor on Target) messages, and intelligently routes them based on configurable filters.
+
+## Status
+
+**Beta Release (v0.2.0)** - Core functionality complete and tested with:
+- ✅ TAK Server (official) - TLS 1.2 with client certificates
+- ✅ TAKy - Basic TCP connections
+- 🚧 FreeTAKServer - Testing in progress
+- 🚧 OpenTAKServer - Testing in progress
 
 ## Features
 
@@ -41,11 +49,97 @@ omnitak/
 ### Technology Stack
 - **Language**: Rust 1.90+ (2021 edition)
 - **Async Runtime**: Tokio
-- **TLS**: Rustls (memory-safe, no OpenSSL)
+- **TLS**: Rustls (memory-safe, no OpenSSL) - TLS 1.2/1.3 compatible
 - **Web Framework**: Axum
 - **Serialization**: Serde, quick-xml, Protobuf (prost)
 - **Metrics**: Prometheus-compatible
 - **Logging**: Tracing with structured logs
+
+## TAK Server Certificate Setup
+
+**IMPORTANT**: Official TAK Server uses TLS 1.2 with client certificates. You must properly format your certificates for compatibility.
+
+### Generating Client Certificates
+
+On your TAK Server, generate a client certificate:
+
+```bash
+cd /opt/tak/certs
+sudo STATE="YourState" CITY="YourCity" ORGANIZATIONAL_UNIT="TAKServer" \
+  bash -c './makeCert.sh client omnitak'
+```
+
+This creates:
+- `omnitak.p12` - PKCS12 bundle (password: atakatak by default)
+- `omnitak.pem` - Client certificate
+- `omnitak.key` - Encrypted private key
+- `ca.pem` - Certificate Authority
+
+### Converting Certificates for Rustls
+
+**Critical**: Rustls requires traditional RSA format, not encrypted PKCS8. Convert using:
+
+```bash
+# Extract certificate (already in correct format)
+openssl pkcs12 -in omnitak.p12 -out omnitak.pem -clcerts -nokeys \
+  -passin pass:atakatak -legacy
+
+# Extract and convert key to traditional RSA format
+openssl pkcs8 -in omnitak.key -out omnitak-rsa.key \
+  -passin pass:atakatak -traditional
+
+# Extract CA certificate
+openssl pkcs12 -in omnitak.p12 -out ca.pem -cacerts -nokeys \
+  -passin pass:atakatak -legacy
+```
+
+**Why `-traditional` is required**: TAK Server uses TLS 1.2 which requires traditional RSA key format. Modern PKCS8 format will cause handshake failures.
+
+### Certificate File Locations
+
+Place your certificates in a secure directory:
+
+```bash
+mkdir -p /path/to/certs
+cp omnitak.pem /path/to/certs/
+cp omnitak-rsa.key /path/to/certs/  # Use the -rsa version!
+cp ca.pem /path/to/certs/
+chmod 600 /path/to/certs/*.key
+chmod 644 /path/to/certs/*.pem
+```
+
+### Configuration Example
+
+```yaml
+servers:
+  - id: tak-server-1
+    address: "takserver.example.com:8089"
+    protocol: tls
+    tls:
+      cert_path: "/path/to/certs/omnitak.pem"
+      key_path: "/path/to/certs/omnitak-rsa.key"  # Traditional RSA format
+      ca_path: "/path/to/certs/ca.pem"
+```
+
+### Troubleshooting TLS Connections
+
+**"TLS handshake failed"** - Wrong key format. Ensure you used `-traditional` flag.
+
+**"No private key found"** - Key is still encrypted. Use `openssl pkcs8` to decrypt.
+
+**"Certificate error: peer not verified"** - Certificate doesn't match TAK Server's CA. Regenerate using TAK Server's `makeCert.sh`.
+
+**Connection timeout** - Check firewall rules and TAK Server's `CoreConfig.xml` allows your certificate's DN.
+
+### Testing Your Connection
+
+```bash
+# Test TLS connectivity
+openssl s_client -connect takserver.example.com:8089 \
+  -cert omnitak.pem -key omnitak-rsa.key -CAfile ca.pem
+
+# Should show "Verify return code: 0 (ok)"
+```
 
 ## Quick Start
 
@@ -204,7 +298,7 @@ OmniTAK exports Prometheus-compatible metrics on `/api/v1/metrics`:
 - **Audit Logging**: All API operations logged with user, action, and timestamp
 
 ### TLS
-- **TLS 1.3 Only**: Modern, secure protocol
+- **TLS 1.2/1.3**: Supports both modern TLS 1.3 and legacy TLS 1.2 (for TAK Server compatibility)
 - **Client Certificates**: Mutual TLS for TAK server connections
 - **Memory-Safe**: Rustls implementation prevents OpenSSL vulnerabilities
 
