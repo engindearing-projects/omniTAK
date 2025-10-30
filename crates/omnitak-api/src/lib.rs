@@ -262,13 +262,13 @@ pub struct Server {
 impl Server {
     /// Run the server
     pub async fn run(self) -> anyhow::Result<()> {
-        // Initialize tracing
-        tracing_subscriber::fmt()
+        // Initialize tracing (ignore if already initialized)
+        let _ = tracing_subscriber::fmt()
             .with_env_filter(
                 tracing_subscriber::EnvFilter::try_from_default_env()
                     .unwrap_or_else(|_| "omnitak_api=debug,tower_http=debug".into()),
             )
-            .init();
+            .try_init();
 
         info!("Starting OmniTAK API server");
 

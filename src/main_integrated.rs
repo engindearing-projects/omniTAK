@@ -1,14 +1,17 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use omnitak_api::{ServerBuilder, ServerConfig};
-use omnitak_client::{TakClient, tls::{TlsClient, TlsClientConfig}};
+use omnitak_client::{TakClient, tls::{TlsClient, TlsClientConfig}, tcp::{TcpClient, TcpClientConfig}};
 use serde::Deserialize;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::signal;
 use tokio_stream::StreamExt;
-use tracing::{error, info};
+use tracing::{debug, error, info, warn};
 
 /// OmniTAK - High-performance TAK aggregator and message broker
 #[derive(Parser, Debug)]
@@ -79,12 +82,47 @@ fn default_enable_tls() -> bool {
     false
 }
 
+/// Connection metrics for monitoring
+#[derive(Debug, Clone)]
+struct ConnectionMetrics {
+    messages_received: Arc<AtomicU64>,
+    bytes_received: Arc<AtomicU64>,
+    errors: Arc<AtomicU64>,
+}
+
+impl ConnectionMetrics {
+    fn new() -> Self {
+        Self {
+            messages_received: Arc::new(AtomicU64::new(0)),
+            bytes_received: Arc::new(AtomicU64::new(0)),
+            errors: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    fn record_message(&self, bytes: usize) {
+        self.messages_received.fetch_add(1, Ordering::Relaxed);
+        self.bytes_received.fetch_add(bytes as u64, Ordering::Relaxed);
+    }
+
+    fn record_error(&self) {
+        self.errors.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn snapshot(&self) -> (u64, u64, u64) {
+        (
+            self.messages_received.load(Ordering::Relaxed),
+            self.bytes_received.load(Ordering::Relaxed),
+            self.errors.load(Ordering::Relaxed),
+        )
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize tracing
-    tracing_subscriber::fmt()
+    // Initialize tracing (ignore if already initialized)
+    let _ = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
-        .init();
+        .try_init();
 
     // Parse command line arguments
     let args = Args::parse();
@@ -120,10 +158,81 @@ async fn main() -> Result<()> {
 
     // Start TAK server connections
     info!("Starting TAK server connections...");
+    let global_metrics = Arc::new(ConnectionMetrics::new());
+
+    // Start periodic stats reporter
+    let metrics_clone = global_metrics.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
+        let mut last_messages = 0u64;
+        let mut last_bytes = 0u64;
+
+        loop {
+            interval.tick().await;
+            let (messages, bytes, errors) = metrics_clone.snapshot();
+            let msg_delta = messages.saturating_sub(last_messages);
+            let bytes_delta = bytes.saturating_sub(last_bytes);
+
+            if msg_delta > 0 || errors > 0 {
+                info!(
+                    "📊 Stats: {} msgs (+{}), {} bytes (+{:.2} KB), {} errors | Rate: {:.1} msg/s",
+                    messages,
+                    msg_delta,
+                    bytes,
+                    bytes_delta as f64 / 1024.0,
+                    errors,
+                    msg_delta as f64 / 30.0
+                );
+            } else {
+                info!("📊 Stats: {} msgs total, {} bytes total, {} errors | No activity in last 30s",
+                    messages, bytes, errors);
+            }
+
+            last_messages = messages;
+            last_bytes = bytes;
+        }
+    });
+
     for server_def in &config.servers {
         info!("Connecting to TAK server: {} at {}", server_def.id, server_def.address);
 
-        if server_def.protocol.to_lowercase() == "tls" {
+        if server_def.protocol.to_lowercase() == "tcp" {
+            // Create TCP client
+            let mut client_config = TcpClientConfig::default();
+            client_config.base.server_addr = server_def.address.clone();
+
+            // Clone for the async task
+            let address = server_def.address.clone();
+            let server_id = server_def.id.clone();
+            let metrics = global_metrics.clone();
+
+            let mut client = TcpClient::new(client_config);
+            tokio::spawn(async move {
+                info!("🔌 Connecting TCP client to {} ({})", address, server_id);
+                if let Err(e) = client.connect().await {
+                    error!("❌ Failed to connect to TAK server {}: {}", server_id, e);
+                } else {
+                    info!("✅ Successfully connected to TAK server: {}", server_id);
+
+                    // Read messages
+                    let mut rx = client.receive_cot();
+                    while let Some(result) = rx.next().await {
+                        match result {
+                            Ok(msg) => {
+                                metrics.record_message(msg.data.len());
+                                debug!("📨 [{}] Received message: {} bytes", server_id, msg.data.len());
+                            }
+                            Err(e) => {
+                                metrics.record_error();
+                                warn!("⚠️  [{}] Error receiving message: {}", server_id, e);
+                                break;
+                            }
+                        }
+                    }
+                    warn!("🔌 Connection closed to TAK server: {}", server_id);
+                }
+            });
+        } else if server_def.protocol.to_lowercase() == "tls" {
             if let Some(ref tls_config) = server_def.tls {
                 // Create TLS client
                 let cert_path = PathBuf::from(&tls_config.cert_path);
@@ -134,36 +243,41 @@ async fn main() -> Result<()> {
                     .with_ca_cert(ca_path);
                 client_config.base.server_addr = server_def.address.clone();
 
-                // Clone address for the async task
+                // Clone for the async task
                 let address = server_def.address.clone();
+                let server_id = server_def.id.clone();
+                let metrics = global_metrics.clone();
 
                 match TlsClient::new(client_config) {
                     Ok(mut client) => {
                         tokio::spawn(async move {
-                            info!("Connecting TLS client to {}", address);
+                            info!("🔒 Connecting TLS client to {} ({})", address, server_id);
                             if let Err(e) = client.connect().await {
-                                error!("Failed to connect to TAK server: {}", e);
+                                error!("❌ Failed to connect to TAK server {}: {}", server_id, e);
                             } else {
-                                info!("Successfully connected to TAK server!");
+                                info!("✅ Successfully connected to TAK server: {}", server_id);
 
                                 // Read messages
                                 let mut rx = client.receive_cot();
                                 while let Some(result) = rx.next().await {
                                     match result {
                                         Ok(msg) => {
-                                            info!("Received message: {} bytes", msg.data.len());
+                                            metrics.record_message(msg.data.len());
+                                            debug!("📨 [{}] Received message: {} bytes", server_id, msg.data.len());
                                         }
                                         Err(e) => {
-                                            error!("Error receiving message: {}", e);
+                                            metrics.record_error();
+                                            warn!("⚠️  [{}] Error receiving message: {}", server_id, e);
                                             break;
                                         }
                                     }
                                 }
+                                warn!("🔒 Connection closed to TAK server: {}", server_id);
                             }
                         });
                     }
                     Err(e) => {
-                        error!("Failed to create TLS client: {}", e);
+                        error!("❌ Failed to create TLS client for {}: {}", server_id, e);
                     }
                 }
             }
