@@ -314,6 +314,7 @@ impl Server {
             pool: pool.clone(),
             distributor: distributor.clone(),
             connections: Arc::new(RwLock::new(Vec::new())),
+            start_time: std::time::Instant::now(),
         };
 
         let ws_state = websocket::WsState::new(self.auth_service.clone());

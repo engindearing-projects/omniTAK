@@ -2050,11 +2050,12 @@ dependencies = [
 
 [[package]]
 name = "omnitak"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
  "config",
+ "futures",
  "omnitak-api",
  "omnitak-cert",
  "omnitak-client",
@@ -2065,6 +2066,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
 ]
@@ -2151,7 +2153,7 @@ dependencies = [
 
 [[package]]
 name = "omnitak-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",

@@ -39,6 +39,7 @@ pub struct ApiState {
     pub pool: Arc<ConnectionPool>,
     pub distributor: Arc<MessageDistributor>,
     pub connections: Arc<RwLock<Vec<ConnectionInfo>>>,
+    pub start_time: std::time::Instant,
 }
 
 // ============================================================================
@@ -88,22 +89,58 @@ pub fn create_rest_router(state: ApiState) -> Router {
     )
 )]
 async fn get_system_status(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
     _user: AuthUser,
 ) -> Result<Json<SystemStatus>, ApiError> {
-    // TODO: Get actual system metrics
+    // Get real metrics from pool
+    let pool_stats = state.pool.stats();
+    let pool_metrics = state.pool.metrics();
+
+    // Calculate uptime
+    let uptime_seconds = state.start_time.elapsed().as_secs();
+
+    // Calculate messages per second (simple average over uptime)
+    let messages_processed = pool_stats.total_messages_received + pool_stats.total_messages_sent;
+    let messages_per_second = if uptime_seconds > 0 {
+        messages_processed as f64 / uptime_seconds as f64
+    } else {
+        0.0
+    };
+
+    // Get memory usage (current process)
+    let memory_usage_bytes = get_memory_usage();
+
     let status = SystemStatus {
-        uptime_seconds: 3600,
-        active_connections: 5,
-        messages_processed: 12345,
-        messages_per_second: 10.5,
-        memory_usage_bytes: 50 * 1024 * 1024,
-        active_filters: 3,
+        uptime_seconds,
+        active_connections: pool_stats.active_connections,
+        messages_processed,
+        messages_per_second,
+        memory_usage_bytes,
+        active_filters: 0, // TODO: Get from filter engine when available
         version: env!("CARGO_PKG_VERSION").to_string(),
         timestamp: Utc::now(),
     };
 
     Ok(Json(status))
+}
+
+// Helper function to get memory usage
+fn get_memory_usage() -> u64 {
+    // Read from /proc/self/statm for Linux
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(statm) = std::fs::read_to_string("/proc/self/statm") {
+            if let Some(pages) = statm.split_whitespace().nth(1) {
+                if let Ok(rss_pages) = pages.parse::<u64>() {
+                    // Convert pages to bytes (page size is typically 4096)
+                    return rss_pages * 4096;
+                }
+            }
+        }
+    }
+
+    // Fallback for non-Linux or if reading failed
+    0
 }
 
 /// GET /api/v1/health - Health check endpoint (no auth required)
@@ -765,18 +802,44 @@ async fn delete_filter(
     )
 )]
 async fn get_metrics(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
     _user: AuthUser,
 ) -> Result<String, ApiError> {
-    // TODO: Export actual Prometheus metrics
+    // Get real metrics from pool
+    let pool_stats = state.pool.stats();
+    let pool_metrics = state.pool.metrics();
+
+    // Format as Prometheus metrics
     Ok(format!(
         "# HELP omnitak_connections_total Total number of connections\n\
          # TYPE omnitak_connections_total gauge\n\
-         omnitak_connections_total 5\n\
+         omnitak_connections_total {}\n\
+         \n\
+         # HELP omnitak_connections_active Active connections\n\
+         # TYPE omnitak_connections_active gauge\n\
+         omnitak_connections_active {}\n\
+         \n\
+         # HELP omnitak_messages_received_total Total messages received\n\
+         # TYPE omnitak_messages_received_total counter\n\
+         omnitak_messages_received_total {}\n\
+         \n\
+         # HELP omnitak_messages_sent_total Total messages sent\n\
+         # TYPE omnitak_messages_sent_total counter\n\
+         omnitak_messages_sent_total {}\n\
          \n\
          # HELP omnitak_messages_processed_total Total messages processed\n\
          # TYPE omnitak_messages_processed_total counter\n\
-         omnitak_messages_processed_total 12345\n"
+         omnitak_messages_processed_total {}\n\
+         \n\
+         # HELP omnitak_uptime_seconds System uptime in seconds\n\
+         # TYPE omnitak_uptime_seconds gauge\n\
+         omnitak_uptime_seconds {}\n",
+        pool_stats.total_connections,
+        pool_stats.active_connections,
+        pool_stats.total_messages_received,
+        pool_stats.total_messages_sent,
+        pool_stats.total_messages_received + pool_stats.total_messages_sent,
+        state.start_time.elapsed().as_secs(),
     ))
 }
 
