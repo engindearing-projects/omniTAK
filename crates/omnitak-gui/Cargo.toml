@@ -1,0 +1,38 @@
+[package]
+name = "omnitak-gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Internal crates
+omnitak-core = { path = "../omnitak-core" }
+omnitak-pool = { path = "../omnitak-pool" }
+omnitak-api = { path = "../omnitak-api" }
+omnitak-cot = { path = "../omnitak-cot" }
+
+# GUI framework
+eframe = { workspace = true }
+egui = { workspace = true }
+egui_extras = { workspace = true }
+poll-promise = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Time handling
+chrono = { workspace = true }
+
+# Async channels
+async-channel = { workspace = true }

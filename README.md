@@ -43,7 +43,8 @@ omnitak/
 ├── omnitak-filter      # MIL-STD-2525 filtering & routing
 ├── omnitak-pool        # Connection pool manager
 ├── omnitak-cert        # Certificate management
-└── omnitak-api         # REST API & WebSocket server
+├── omnitak-api         # REST API & WebSocket server
+└── omnitak-gui         # Native desktop GUI (egui/eframe)
 ```
 
 ### Technology Stack
@@ -51,9 +52,36 @@ omnitak/
 - **Async Runtime**: Tokio
 - **TLS**: Rustls (memory-safe, no OpenSSL) - TLS 1.2/1.3 compatible
 - **Web Framework**: Axum
+- **GUI Framework**: egui/eframe (native, cross-platform)
 - **Serialization**: Serde, quick-xml, Protobuf (prost)
 - **Metrics**: Prometheus-compatible
 - **Logging**: Tracing with structured logs
+
+## Desktop GUI
+
+**NEW**: Native desktop GUI for managing OmniTAK connections!
+
+OmniTAK now includes a native desktop GUI built with Rust (egui/eframe) for easy management of TAK server connections. The GUI provides:
+
+- **Dashboard**: System overview, metrics, and connection status
+- **Connection Management**: Add, edit, and remove TAK servers with TLS configuration
+- **Message Viewer**: Real-time CoT message log with filtering
+- **Settings**: Application configuration and preferences
+
+### Running the GUI
+
+```bash
+# Build and run the GUI
+cargo build --bin omnitak-gui --release
+cargo run --bin omnitak-gui --release
+```
+
+**Platform Support**:
+- ✅ Ubuntu/Linux (tested on Ubuntu 20.04+)
+- ✅ macOS (Intel and Apple Silicon)
+- ⏳ Windows (coming soon)
+
+See the **[GUI Setup Guide](docs/GUI_SETUP.md)** for detailed installation instructions, platform-specific setup, and usage guide.
 
 ## Easy Setup with ADB (Recommended)
 
