@@ -98,6 +98,10 @@ license.workspace = true
 name = "omnitak"
 path = "src/main_integrated.rs"
 
+[[bin]]
+name = "omnitak-adb-setup"
+path = "src/bin/omnitak-adb-setup.rs"
+
 [dependencies]
 omnitak-core = { path = "crates/omnitak-core" }
 omnitak-cot = { path = "crates/omnitak-cot" }
@@ -117,6 +121,7 @@ serde = { workspace = true }
 serde_yaml = { workspace = true }
 config = { workspace = true }
 futures = "0.3"
+chrono = { workspace = true }
 
 [profile.release]
 opt-level = 3
