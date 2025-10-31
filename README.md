@@ -55,7 +55,41 @@ omnitak/
 - **Metrics**: Prometheus-compatible
 - **Logging**: Tracing with structured logs
 
-## TAK Server Certificate Setup
+## Easy Setup with ADB (Recommended)
+
+**NEW in v0.2.0**: Automatically pull TAK certificates and configuration from your Android device!
+
+If you already have ATAK/WinTAK configured on an Android device, you can use the **ADB Setup Tool** to automatically extract certificates and generate your OmniTAK configuration.
+
+### Quick Setup with ADB
+
+```bash
+# 1. Build OmniTAK with the ADB setup tool
+cargo build --release
+
+# 2. Connect your Android device via USB and enable USB debugging
+
+# 3. Run the ADB setup tool
+./target/release/omnitak-adb-setup --output config/config.yaml --cert-dir certs
+
+# 4. Convert certificates to PEM format
+./scripts/convert-p12-to-pem.sh certs/*.p12 certs
+
+# 5. Start OmniTAK
+cargo run --release -- --config config/config.yaml
+```
+
+**That's it!** The tool will:
+- ✅ Detect your Android device
+- ✅ Extract TAK certificates from the device
+- ✅ Pull TAK server configuration (addresses, ports)
+- ✅ Generate a ready-to-use `config.yaml` file
+
+See the **[ADB Setup Guide](docs/ADB_SETUP.md)** for detailed instructions, troubleshooting, and manual setup options.
+
+---
+
+## TAK Server Certificate Setup (Manual)
 
 **IMPORTANT**: Official TAK Server uses TLS 1.2 with client certificates. You must properly format your certificates for compatibility.
 
@@ -230,6 +264,23 @@ api:
   tls_key_path: "/path/to/server.key"
 ```
 
+**Tip**: Use the [ADB Setup Tool](docs/ADB_SETUP.md) to generate this configuration automatically from your Android device!
+
+### Viewing Data Flow
+
+OmniTAK provides multiple ways to view and filter data from connected TAK servers:
+
+- **Web UI**: Real-time message feed and connection status at `http://localhost:9443`
+- **WebSocket API**: Stream CoT messages with custom filters
+- **REST API**: Query historical messages and statistics
+- **Prometheus Metrics**: Monitor performance and message flow
+
+See the **[Filtering Guide](docs/FILTERING.md)** for detailed information on:
+- Setting up message filters
+- Viewing data flow in real-time
+- Filtering by affiliation, geography, team, or custom criteria
+- Performance tuning and best practices
+
 ### REST API
 
 ```bash
@@ -337,6 +388,14 @@ docker-compose up -d
 
 ## Documentation
 
+### Setup Guides
+- **[ADB Setup Guide](docs/ADB_SETUP.md)** - Automatically pull certificates from Android devices
+- **[Filtering Guide](docs/FILTERING.md)** - Configure message filtering and view data flow
+- [macOS Setup](SETUP_MACOS.md) - Complete macOS installation
+- [Ubuntu Setup](SETUP_UBUNTU.md) - Complete Linux installation
+- [Windows Setup](SETUP_WINDOWS.md) - Complete Windows installation
+
+### Technical Documentation
 - [API Documentation](./crates/omnitak-api/README.md)
 - [CoT Parser](./crates/omnitak-cot/README.md)
 - [Filter System](./crates/omnitak-filter/README.md)
