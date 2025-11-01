@@ -192,11 +192,17 @@ sudo apt-get install -y \
   libxkbcommon-dev \
   libssl-dev \
   libfontconfig1-dev \
-  pkg-config
+  pkg-config \
+  protobuf-compiler
 ```
 
 ### macOS
-No additional dependencies required. Xcode Command Line Tools included by default on GitHub Actions runners.
+Required packages:
+```bash
+brew install protobuf
+```
+
+Note: Xcode Command Line Tools are included by default on GitHub Actions runners.
 
 ### Windows (Future)
 Will require additional setup for cross-compilation or Windows runners.
