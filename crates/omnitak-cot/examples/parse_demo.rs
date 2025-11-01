@@ -1,6 +1,6 @@
 use omnitak_cot::parser::parse_cot;
+use omnitak_cot::proto::{decode_event, encode_event};
 use omnitak_cot::validate::validate_event;
-use omnitak_cot::proto::{encode_event, decode_event};
 
 fn main() {
     // Example CoT message
@@ -23,10 +23,14 @@ fn main() {
             println!("  Type: {}", event.event_type);
             println!("  Version: {}", event.version);
             println!("  Time: {}", event.time);
-            println!("  Location: {:.4}, {:.4} @ {:.1}m",
-                     event.point.lat, event.point.lon, event.point.hae);
-            println!("  Accuracy: CE={:.1}m, LE={:.1}m",
-                     event.point.ce, event.point.le);
+            println!(
+                "  Location: {:.4}, {:.4} @ {:.1}m",
+                event.point.lat, event.point.lon, event.point.hae
+            );
+            println!(
+                "  Accuracy: CE={:.1}m, LE={:.1}m",
+                event.point.ce, event.point.le
+            );
 
             // Show affiliation
             if let Some(affiliation) = event.affiliation() {

@@ -1,8 +1,8 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use omnitak_cot::parser::parse_cot;
-use omnitak_cot::proto::{encode_event, decode_event};
-use omnitak_cot::event::{Event, Point};
 use chrono::{TimeZone, Utc};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use omnitak_cot::event::{Event, Point};
+use omnitak_cot::parser::parse_cot;
+use omnitak_cot::proto::{decode_event, encode_event};
 
 // Example CoT messages for benchmarking
 const SIMPLE_COT: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -89,13 +89,9 @@ fn bench_protobuf(c: &mut Criterion) {
     let event = create_test_event();
     let encoded = encode_event(&event).unwrap();
 
-    group.bench_function("encode", |b| {
-        b.iter(|| encode_event(black_box(&event)))
-    });
+    group.bench_function("encode", |b| b.iter(|| encode_event(black_box(&event))));
 
-    group.bench_function("decode", |b| {
-        b.iter(|| decode_event(black_box(&encoded)))
-    });
+    group.bench_function("decode", |b| b.iter(|| decode_event(black_box(&encoded))));
 
     group.bench_function("roundtrip", |b| {
         b.iter(|| {
@@ -113,13 +109,17 @@ fn bench_comparison(c: &mut Criterion) {
     let event = create_test_event();
     let proto_encoded = encode_event(&event).unwrap();
 
-    group.bench_with_input(BenchmarkId::new("xml_parse", "simple"), &SIMPLE_COT, |b, xml| {
-        b.iter(|| parse_cot(black_box(xml)))
-    });
+    group.bench_with_input(
+        BenchmarkId::new("xml_parse", "simple"),
+        &SIMPLE_COT,
+        |b, xml| b.iter(|| parse_cot(black_box(xml))),
+    );
 
-    group.bench_with_input(BenchmarkId::new("proto_decode", "simple"), &proto_encoded, |b, data| {
-        b.iter(|| decode_event(black_box(data)))
-    });
+    group.bench_with_input(
+        BenchmarkId::new("proto_decode", "simple"),
+        &proto_encoded,
+        |b, data| b.iter(|| decode_event(black_box(data))),
+    );
 
     group.finish();
 }

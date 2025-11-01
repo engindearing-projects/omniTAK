@@ -2,7 +2,7 @@ use crate::client::{
     ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, TakClient,
 };
 use crate::state::{ConnectionState, ConnectionStatus};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use bytes::Bytes;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -99,9 +99,10 @@ impl UdpClient {
         self.remote_addr = Some(remote_addr);
 
         // Determine local bind address
-        let local_addr = self.config.local_addr.unwrap_or_else(|| {
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0)
-        });
+        let local_addr = self
+            .config
+            .local_addr
+            .unwrap_or_else(|| SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0));
 
         info!("Binding UDP socket to {}", local_addr);
 
@@ -332,10 +333,7 @@ impl TakClient for UdpClient {
             return Err(anyhow!("Socket not bound"));
         }
 
-        debug!(
-            size = message.data.len(),
-            "Sending CoT message via UDP"
-        );
+        debug!(size = message.data.len(), "Sending CoT message via UDP");
 
         // Handle fragmentation for large messages
         if message.data.len() > MAX_UDP_PACKET_SIZE {
@@ -372,9 +370,7 @@ impl TakClient for UdpClient {
                     HealthStatus::Unhealthy
                 }
             }
-            ConnectionState::Connecting | ConnectionState::Reconnecting => {
-                HealthStatus::Degraded
-            }
+            ConnectionState::Connecting | ConnectionState::Reconnecting => HealthStatus::Degraded,
             ConnectionState::Disconnected => HealthStatus::Disconnected,
             ConnectionState::Failed => HealthStatus::Unhealthy,
         };

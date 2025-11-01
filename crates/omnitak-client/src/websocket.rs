@@ -1,17 +1,20 @@
 use crate::client::{
-    calculate_backoff, ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, TakClient,
+    ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, TakClient,
+    calculate_backoff,
 };
 use crate::state::{ConnectionState, ConnectionStatus};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::time::{interval, timeout, Duration};
+use tokio::time::{Duration, interval, timeout};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{
+    MaybeTlsStream, WebSocketStream, connect_async, tungstenite::protocol::Message,
+};
 use tracing::{debug, error, info, instrument, warn};
 
 /// Configuration specific to WebSocket client
@@ -112,10 +115,7 @@ impl WebSocketClient {
         .context("Connection timeout")?
         .context("Failed to connect to WebSocket")?;
 
-        info!(
-            "WebSocket connected (status: {})",
-            response.status()
-        );
+        info!("WebSocket connected (status: {})", response.status());
 
         self.ws_stream = Some(ws_stream);
         self.status.set_state(ConnectionState::Connected);
@@ -275,13 +275,10 @@ impl WebSocketClient {
             }
         };
 
-        timeout(
-            self.config.base.write_timeout,
-            stream.send(message),
-        )
-        .await
-        .context("Send timeout")?
-        .context("Failed to send message")?;
+        timeout(self.config.base.write_timeout, stream.send(message))
+            .await
+            .context("Send timeout")?
+            .context("Failed to send message")?;
 
         self.status.metrics().record_bytes_sent(data.len() as u64);
 
@@ -305,8 +302,7 @@ impl TakClient for WebSocketClient {
                         if attempt > 0 {
                             info!(
                                 attempt = attempt,
-                                "Successfully reconnected after {} attempts",
-                                attempt
+                                "Successfully reconnected after {} attempts", attempt
                             );
                         }
                         break Ok(());
@@ -359,7 +355,8 @@ impl TakClient for WebSocketClient {
             let _ = timeout(
                 Duration::from_secs(5),
                 stream.close(Some(CloseFrame {
-                    code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+                    code:
+                        tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
                     reason: "Client disconnect".into(),
                 })),
             )
@@ -419,9 +416,7 @@ impl TakClient for WebSocketClient {
                     HealthStatus::Healthy
                 }
             }
-            ConnectionState::Connecting | ConnectionState::Reconnecting => {
-                HealthStatus::Degraded
-            }
+            ConnectionState::Connecting | ConnectionState::Reconnecting => HealthStatus::Degraded,
             ConnectionState::Disconnected => HealthStatus::Disconnected,
             ConnectionState::Failed => HealthStatus::Unhealthy,
         };

@@ -75,11 +75,9 @@ impl AppConfig {
     /// Returns an error if the file cannot be read or parsed.
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
-        let contents = std::fs::read_to_string(path).map_err(|e| {
-            ConfigError::LoadFailed {
-                path: path.display().to_string(),
-                reason: e.to_string(),
-            }
+        let contents = std::fs::read_to_string(path).map_err(|e| ConfigError::LoadFailed {
+            path: path.display().to_string(),
+            reason: e.to_string(),
         })?;
 
         Self::from_yaml(&contents)
@@ -162,12 +160,12 @@ impl AppConfig {
 
         // Validate each server configuration
         for server in &self.servers {
-            server.validate().map_err(|reason| {
-                ConfigError::InvalidServerConfig {
+            server
+                .validate()
+                .map_err(|reason| ConfigError::InvalidServerConfig {
                     server: server.name.clone(),
                     reason,
-                }
-            })?;
+                })?;
 
             // Validate TLS configuration if present
             if let Some(ref tls) = server.tls {
@@ -221,7 +219,8 @@ impl AppConfig {
             (Some(_), None) | (None, Some(_)) => {
                 return Err(ConfigError::InvalidServerConfig {
                     server: server_name.to_string(),
-                    reason: "Client cert and key must both be specified or both omitted".to_string(),
+                    reason: "Client cert and key must both be specified or both omitted"
+                        .to_string(),
                 }
                 .into());
             }
@@ -371,9 +370,10 @@ impl FilterConfig {
     /// Validates the filter configuration.
     pub fn validate(&self) -> Result<()> {
         for (i, rule) in self.rules.iter().enumerate() {
-            rule.validate().map_err(|e| ConfigError::InvalidFilterRule {
-                reason: format!("Rule #{}: {}", i + 1, e),
-            })?;
+            rule.validate()
+                .map_err(|e| ConfigError::InvalidFilterRule {
+                    reason: format!("Rule #{}: {}", i + 1, e),
+                })?;
         }
         Ok(())
     }
@@ -531,13 +531,13 @@ impl Default for LoggingConfig {
 impl LoggingConfig {
     /// Parses the log level string to a tracing Level.
     pub fn parse_level(&self) -> Result<Level> {
-        self.level
-            .parse()
-            .map_err(|_| ConfigError::InvalidValue {
+        self.level.parse().map_err(|_| {
+            ConfigError::InvalidValue {
                 field: "logging.level".to_string(),
                 reason: format!("Invalid log level: {}", self.level),
             }
-            .into())
+            .into()
+        })
     }
 }
 

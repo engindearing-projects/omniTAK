@@ -381,11 +381,7 @@ impl ConnectionPool {
     }
 
     /// Send message to a specific connection
-    pub async fn send_to_connection(
-        &self,
-        id: &ConnectionId,
-        message: PoolMessage,
-    ) -> Result<()> {
+    pub async fn send_to_connection(&self, id: &ConnectionId, message: PoolMessage) -> Result<()> {
         let connection = self.get_connection(id).context("Connection not found")?;
 
         connection
@@ -454,10 +450,7 @@ impl ConnectionPool {
     pub fn stats(&self) -> PoolStats {
         let connections: Vec<_> = self.connections.iter().map(|e| Arc::clone(&*e)).collect();
 
-        let active_count = connections
-            .iter()
-            .filter(|c| c.state.is_active())
-            .count();
+        let active_count = connections.iter().filter(|c| c.state.is_active()).count();
 
         let total_sent: u64 = connections
             .iter()

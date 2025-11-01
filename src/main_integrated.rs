@@ -1,7 +1,11 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use omnitak_api::{ServerBuilder, ServerConfig};
-use omnitak_client::{TakClient, tls::{TlsClient, TlsClientConfig}, tcp::{TcpClient, TcpClientConfig}};
+use omnitak_client::{
+    tcp::{TcpClient, TcpClientConfig},
+    tls::{TlsClient, TlsClientConfig},
+    TakClient,
+};
 use serde::Deserialize;
 use std::fs;
 use std::net::SocketAddr;
@@ -101,7 +105,8 @@ impl ConnectionMetrics {
 
     fn record_message(&self, bytes: usize) {
         self.messages_received.fetch_add(1, Ordering::Relaxed);
-        self.bytes_received.fetch_add(bytes as u64, Ordering::Relaxed);
+        self.bytes_received
+            .fetch_add(bytes as u64, Ordering::Relaxed);
     }
 
     fn record_error(&self) {
@@ -131,19 +136,17 @@ async fn main() -> Result<()> {
     let config_content = fs::read_to_string(&args.config)
         .with_context(|| format!("Failed to read config file: {:?}", args.config))?;
 
-    let config: Config = serde_yaml::from_str(&config_content)
-        .context("Failed to parse config file")?;
+    let config: Config =
+        serde_yaml::from_str(&config_content).context("Failed to parse config file")?;
 
     // Build server configuration
-    let bind_addr: SocketAddr = args
-        .bind
-        .unwrap_or_else(|| {
-            config
-                .api
-                .bind_addr
-                .parse()
-                .expect("Invalid bind address in config")
-        });
+    let bind_addr: SocketAddr = args.bind.unwrap_or_else(|| {
+        config
+            .api
+            .bind_addr
+            .parse()
+            .expect("Invalid bind address in config")
+    });
 
     let server_config = ServerConfig {
         bind_addr,
@@ -184,8 +187,10 @@ async fn main() -> Result<()> {
                     msg_delta as f64 / 30.0
                 );
             } else {
-                info!("📊 Stats: {} msgs total, {} bytes total, {} errors | No activity in last 30s",
-                    messages, bytes, errors);
+                info!(
+                    "📊 Stats: {} msgs total, {} bytes total, {} errors | No activity in last 30s",
+                    messages, bytes, errors
+                );
             }
 
             last_messages = messages;
@@ -194,7 +199,10 @@ async fn main() -> Result<()> {
     });
 
     for server_def in &config.servers {
-        info!("Connecting to TAK server: {} at {}", server_def.id, server_def.address);
+        info!(
+            "Connecting to TAK server: {} at {}",
+            server_def.id, server_def.address
+        );
 
         if server_def.protocol.to_lowercase() == "tcp" {
             // Create TCP client
@@ -220,7 +228,11 @@ async fn main() -> Result<()> {
                         match result {
                             Ok(msg) => {
                                 metrics.record_message(msg.data.len());
-                                debug!("📨 [{}] Received message: {} bytes", server_id, msg.data.len());
+                                debug!(
+                                    "📨 [{}] Received message: {} bytes",
+                                    server_id,
+                                    msg.data.len()
+                                );
                             }
                             Err(e) => {
                                 metrics.record_error();
@@ -239,8 +251,8 @@ async fn main() -> Result<()> {
                 let key_path = PathBuf::from(&tls_config.key_path);
                 let ca_path = PathBuf::from(&tls_config.ca_path);
 
-                let mut client_config = TlsClientConfig::new(cert_path, key_path)
-                    .with_ca_cert(ca_path);
+                let mut client_config =
+                    TlsClientConfig::new(cert_path, key_path).with_ca_cert(ca_path);
                 client_config.base.server_addr = server_def.address.clone();
 
                 // Clone for the async task
@@ -263,11 +275,18 @@ async fn main() -> Result<()> {
                                     match result {
                                         Ok(msg) => {
                                             metrics.record_message(msg.data.len());
-                                            debug!("📨 [{}] Received message: {} bytes", server_id, msg.data.len());
+                                            debug!(
+                                                "📨 [{}] Received message: {} bytes",
+                                                server_id,
+                                                msg.data.len()
+                                            );
                                         }
                                         Err(e) => {
                                             metrics.record_error();
-                                            warn!("⚠️  [{}] Error receiving message: {}", server_id, e);
+                                            warn!(
+                                                "⚠️  [{}] Error receiving message: {}",
+                                                server_id, e
+                                            );
                                             break;
                                         }
                                     }

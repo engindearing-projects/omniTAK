@@ -27,13 +27,19 @@ pub struct PoolMetrics {
 impl PoolMetrics {
     pub fn new() -> Self {
         // Describe metrics
-        describe_counter!("pool_messages_sent_total", "Total messages sent through pool");
+        describe_counter!(
+            "pool_messages_sent_total",
+            "Total messages sent through pool"
+        );
         describe_counter!(
             "pool_messages_received_total",
             "Total messages received by pool"
         );
         describe_counter!("pool_connections_added_total", "Total connections added");
-        describe_counter!("pool_connections_removed_total", "Total connections removed");
+        describe_counter!(
+            "pool_connections_removed_total",
+            "Total connections removed"
+        );
 
         Self {
             messages_sent: AtomicU64::new(0),
@@ -110,10 +116,7 @@ impl DistributorMetrics {
             "distributor_latency_seconds",
             "Distribution latency in seconds"
         );
-        describe_histogram!(
-            "distributor_batch_size",
-            "Number of messages in each batch"
-        );
+        describe_histogram!("distributor_batch_size", "Number of messages in each batch");
         describe_histogram!(
             "distributor_batch_duration_seconds",
             "Time to process each batch in seconds"

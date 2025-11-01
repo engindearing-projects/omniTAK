@@ -162,10 +162,7 @@ mod integration_tests {
             worker_count: 2,
             ..Default::default()
         };
-        let aggregator = Arc::new(MessageAggregator::new(
-            Arc::clone(&distributor),
-            agg_config,
-        ));
+        let aggregator = Arc::new(MessageAggregator::new(Arc::clone(&distributor), agg_config));
         aggregator.start().await;
 
         // Add test connection
@@ -216,11 +213,7 @@ mod integration_tests {
         }
 
         // Next acquire should block/timeout
-        let result = tokio::time::timeout(
-            Duration::from_millis(100),
-            limiter.acquire(),
-        )
-        .await;
+        let result = tokio::time::timeout(Duration::from_millis(100), limiter.acquire()).await;
         assert!(result.is_err());
 
         // Release permits

@@ -40,14 +40,13 @@ pub mod types;
 pub mod websocket;
 
 use auth::{AuthConfig, AuthService, AuthUser};
-use types::UserRole;
 use middleware::{
-    cors_layer, logging_middleware, rate_limit_middleware, request_id_middleware,
-    security_headers_middleware, timeout_middleware, RateLimitState, ReadinessState,
+    RateLimitState, ReadinessState, cors_layer, logging_middleware, rate_limit_middleware,
+    request_id_middleware, security_headers_middleware, timeout_middleware,
 };
 use omnitak_pool::{
-    AggregatorConfig, ConcurrencyConfig, ConnectionPool, DistributionStrategy,
-    DistributorConfig, MessageAggregator, MessageDistributor, PoolConfig,
+    AggregatorConfig, ConcurrencyConfig, ConnectionPool, DistributionStrategy, DistributorConfig,
+    MessageAggregator, MessageDistributor, PoolConfig,
 };
 use rest::ApiState;
 use std::net::SocketAddr;
@@ -58,6 +57,7 @@ use tokio::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use tracing::{error, info};
+use types::UserRole;
 use utoipa::OpenApi;
 
 // ============================================================================
@@ -223,11 +223,7 @@ impl ServerBuilder {
     pub fn with_default_user(mut self, username: &str, password: &str) -> Self {
         let auth_service = Arc::new(AuthService::new(self.config.auth_config.clone()));
 
-        if let Err(e) = auth_service.create_user(
-            username.to_string(),
-            password,
-            UserRole::Admin,
-        ) {
+        if let Err(e) = auth_service.create_user(username.to_string(), password, UserRole::Admin) {
             error!(error = %e, "Failed to create default user");
         } else {
             info!(username = username, "Created default admin user");
@@ -305,7 +301,10 @@ impl Server {
             channel_capacity: 1024,
             worker_count: 4,
         };
-        let _aggregator = Arc::new(MessageAggregator::new(distributor.clone(), aggregator_config));
+        let _aggregator = Arc::new(MessageAggregator::new(
+            distributor.clone(),
+            aggregator_config,
+        ));
 
         // Create application state
         let api_state = ApiState {
@@ -335,9 +334,7 @@ impl Server {
             let openapi = ApiDoc::openapi();
             app = app.route(
                 "/api-docs/openapi.json",
-                axum::routing::get(|| async move {
-                    axum::Json(openapi)
-                }),
+                axum::routing::get(|| async move { axum::Json(openapi) }),
             );
             info!("OpenAPI spec available at /api-docs/openapi.json");
             info!("Custom API docs available at /api-docs.html, /rapidoc.html, /redoc.html");

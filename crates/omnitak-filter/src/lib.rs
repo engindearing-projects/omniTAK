@@ -101,7 +101,9 @@ pub mod rules;
 // Re-export commonly used types
 pub use affiliation::{Affiliation, CotType, Dimension};
 pub use config::{FilterConfig, RouteConfig, RoutingConfig};
-pub use router::{DestinationId, Route, RouteStrategy, RouteTable, RouteTableBuilder, RoutingResult};
+pub use router::{
+    DestinationId, Route, RouteStrategy, RouteTable, RouteTableBuilder, RoutingResult,
+};
 pub use rules::{
     AffiliationFilter, CotMessage, DimensionFilter, FilterResult, FilterRule, FilterStats,
     GeoBoundingBoxFilter, GroupFilter, TeamFilter, UidFilter,

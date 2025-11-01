@@ -42,14 +42,23 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
             let state = state.lock().unwrap();
 
             ui.label(format!("Total Servers: {}", state.servers.len()));
-            ui.label(format!("Active Connections: {}", state.metrics.active_connections));
-            ui.label(format!("Message Log Size: {} entries", state.message_log.len()));
+            ui.label(format!(
+                "Active Connections: {}",
+                state.metrics.active_connections
+            ));
+            ui.label(format!(
+                "Message Log Size: {} entries",
+                state.message_log.len()
+            ));
         });
 
     ui.add_space(20.0);
 
     // Future settings
-    ui.label(egui::RichText::new("Additional settings will be added in future releases").color(egui::Color32::GRAY));
+    ui.label(
+        egui::RichText::new("Additional settings will be added in future releases")
+            .color(egui::Color32::GRAY),
+    );
     ui.add_space(10.0);
 
     // Import/Export Configuration
@@ -143,7 +152,10 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
     ui.add_space(20.0);
 
     // Future settings
-    ui.label(egui::RichText::new("Additional settings will be added in future releases").color(egui::Color32::GRAY));
+    ui.label(
+        egui::RichText::new("Additional settings will be added in future releases")
+            .color(egui::Color32::GRAY),
+    );
     ui.add_space(10.0);
 
     ui.horizontal(|ui| {

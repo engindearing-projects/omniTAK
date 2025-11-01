@@ -4,7 +4,7 @@
 //! TAK server connection logic.
 
 use crate::{AppMetrics, ConnectionMetadata, MessageLog};
-use async_channel::{Receiver, Sender, unbounded};
+use async_channel::{unbounded, Receiver, Sender};
 use omnitak_core::types::{ConnectionId, ServerConfig, ServerStatus};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -100,7 +100,9 @@ impl BackendService {
         let _ = self.command_tx.try_send(BackendCommand::Shutdown);
 
         if let Some(handle) = self.worker_handle.take() {
-            handle.join().map_err(|_| anyhow::anyhow!("Failed to join worker thread"))?;
+            handle
+                .join()
+                .map_err(|_| anyhow::anyhow!("Failed to join worker thread"))?;
         }
 
         Ok(())
@@ -190,10 +192,13 @@ async fn handle_connect(state: &mut WorkerState, config: ServerConfig) {
     // TODO: Integrate with actual omnitak-client
     metadata.mark_connected();
 
-    let _ = state.event_tx.send(BackendEvent::StatusUpdate(
-        config.name.clone(),
-        metadata.clone(),
-    )).await;
+    let _ = state
+        .event_tx
+        .send(BackendEvent::StatusUpdate(
+            config.name.clone(),
+            metadata.clone(),
+        ))
+        .await;
 
     state.connections.insert(
         config.name.clone(),
@@ -215,10 +220,13 @@ async fn handle_disconnect(state: &mut WorkerState, server_name: &str) {
         }
 
         handle.metadata.mark_disconnected(None);
-        let _ = state.event_tx.send(BackendEvent::StatusUpdate(
-            server_name.to_string(),
-            handle.metadata,
-        )).await;
+        let _ = state
+            .event_tx
+            .send(BackendEvent::StatusUpdate(
+                server_name.to_string(),
+                handle.metadata,
+            ))
+            .await;
     }
 }
 
@@ -250,5 +258,8 @@ async fn update_metrics(state: &WorkerState) {
         }
     }
 
-    let _ = state.event_tx.send(BackendEvent::MetricsUpdate(metrics)).await;
+    let _ = state
+        .event_tx
+        .send(BackendEvent::MetricsUpdate(metrics))
+        .await;
 }

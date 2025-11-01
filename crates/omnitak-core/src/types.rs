@@ -155,7 +155,10 @@ impl ServerStatus {
 
     /// Returns true if the status indicates a recoverable state.
     pub fn is_recoverable(&self) -> bool {
-        matches!(self, ServerStatus::Disconnected | ServerStatus::Reconnecting)
+        matches!(
+            self,
+            ServerStatus::Disconnected | ServerStatus::Reconnecting
+        )
     }
 }
 

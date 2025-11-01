@@ -42,14 +42,14 @@
 pub mod client;
 pub mod state;
 pub mod tcp;
-pub mod udp;
 pub mod tls;
+pub mod udp;
 pub mod websocket;
 
 // Re-export commonly used types
 pub use client::{
-    ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata,
-    ReconnectConfig, TakClient,
+    ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, ReconnectConfig,
+    TakClient,
 };
 pub use state::{ConnectionMetrics, ConnectionState, ConnectionStatus, MetricsSnapshot};
 

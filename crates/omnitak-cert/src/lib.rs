@@ -3,7 +3,7 @@
 //! Handles loading, parsing, and validating certificates for TAK server connections.
 //! Supports PEM, DER, and PKCS#12 formats with password protection.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use base64::prelude::*;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use serde::{Deserialize, Serialize};
@@ -44,11 +44,7 @@ impl Clone for CertificateBundle {
 
 impl CertificateBundle {
     /// Create a new certificate bundle from PEM-encoded data
-    pub fn from_pem(
-        cert_pem: &[u8],
-        key_pem: &[u8],
-        ca_pem: Option<&[u8]>,
-    ) -> Result<Self> {
+    pub fn from_pem(cert_pem: &[u8], key_pem: &[u8], ca_pem: Option<&[u8]>) -> Result<Self> {
         info!("Loading certificates from PEM data");
 
         // Parse client certificate
@@ -143,11 +139,7 @@ impl CertificateBundle {
                 None
             };
 
-            Self::from_pem(
-                &cert_bytes,
-                &key_bytes,
-                ca_bytes.as_deref(),
-            )
+            Self::from_pem(&cert_bytes, &key_bytes, ca_bytes.as_deref())
         }
     }
 }

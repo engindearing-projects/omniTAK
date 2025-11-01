@@ -91,8 +91,7 @@ fn main() -> Result<()> {
     info!("Using device: {}", device_serial);
 
     // Create certificate directory
-    fs::create_dir_all(&args.cert_dir)
-        .context("Failed to create certificate directory")?;
+    fs::create_dir_all(&args.cert_dir).context("Failed to create certificate directory")?;
 
     // Pull certificates and configuration
     let config = pull_tak_config(
@@ -104,8 +103,7 @@ fn main() -> Result<()> {
 
     // Generate omniTAK configuration
     let output_dir = args.output.parent().unwrap_or(Path::new("."));
-    fs::create_dir_all(output_dir)
-        .context("Failed to create output directory")?;
+    fs::create_dir_all(output_dir).context("Failed to create output directory")?;
 
     save_config(&config, &args.output)?;
 
@@ -179,9 +177,13 @@ fn get_device_serial(device: Option<&str>) -> Result<String> {
         .collect();
 
     match devices.len() {
-        0 => Err(anyhow!("No devices found. Connect an Android device with ADB enabled")),
+        0 => Err(anyhow!(
+            "No devices found. Connect an Android device with ADB enabled"
+        )),
         1 => {
-            let serial = devices[0].split_whitespace().next()
+            let serial = devices[0]
+                .split_whitespace()
+                .next()
                 .ok_or_else(|| anyhow!("Failed to parse device serial"))?;
             Ok(serial.to_string())
         }
@@ -247,7 +249,10 @@ fn pull_tak_config(
     // Validate configuration
     if !skip_validation && config.servers.is_empty() {
         warn!("No TAK server configurations found");
-        warn!("You may need to manually configure server details in: {}", "config/config.yaml");
+        warn!(
+            "You may need to manually configure server details in: {}",
+            "config/config.yaml"
+        );
     }
 
     Ok(config)
@@ -276,17 +281,26 @@ fn pull_certificates(
         }
 
         // Check for certificate files
-        if file.ends_with(".p12") || file.ends_with(".pem") ||
-           file.ends_with(".key") || file.ends_with(".crt") ||
-           file.ends_with(".pfx") || file.ends_with(".cer") {
-
+        if file.ends_with(".p12")
+            || file.ends_with(".pem")
+            || file.ends_with(".key")
+            || file.ends_with(".crt")
+            || file.ends_with(".pfx")
+            || file.ends_with(".cer")
+        {
             let remote_file = format!("{}/{}", remote_path, file);
             let local_file = local_dir.join(file);
 
             debug!("Pulling: {} -> {}", remote_file, local_file.display());
 
             let status = Command::new("adb")
-                .args(["-s", device, "pull", &remote_file, local_file.to_str().unwrap()])
+                .args([
+                    "-s",
+                    device,
+                    "pull",
+                    &remote_file,
+                    local_file.to_str().unwrap(),
+                ])
                 .status()?;
 
             if status.success() {
@@ -320,14 +334,13 @@ fn find_and_pull_p12_files(
     info!("Searching for .p12 certificate files...");
 
     // Search in accessible locations
-    let search_paths = vec![
-        "/sdcard",
-        "/storage/emulated/0",
-    ];
+    let search_paths = vec!["/sdcard", "/storage/emulated/0"];
 
     for base_path in search_paths {
         let output = Command::new("adb")
-            .args(["-s", device, "shell", "find", base_path, "-name", "*.p12", "-type", "f"])
+            .args([
+                "-s", device, "shell", "find", base_path, "-name", "*.p12", "-type", "f",
+            ])
             .output();
 
         if let Ok(output) = output {
@@ -336,7 +349,8 @@ fn find_and_pull_p12_files(
                 for file in files.lines() {
                     let file = file.trim();
                     if !file.is_empty() {
-                        let filename = Path::new(file).file_name()
+                        let filename = Path::new(file)
+                            .file_name()
                             .and_then(|n| n.to_str())
                             .unwrap_or("unknown.p12");
                         let local_file = local_dir.join(filename);
@@ -361,17 +375,19 @@ fn find_and_pull_p12_files(
 }
 
 /// Pull TAK server configuration from preferences
-fn pull_tak_server_config(
-    device: &str,
-    package: &str,
-    config: &mut OmniTakConfig,
-) -> Result<()> {
+fn pull_tak_server_config(device: &str, package: &str, config: &mut OmniTakConfig) -> Result<()> {
     info!("Pulling TAK server configuration...");
 
     // Try to pull preferences XML
     let pref_paths = vec![
-        format!("/data/data/{}/shared_prefs/{}_preferences.xml", package, package),
-        format!("/data/data/{}/shared_prefs/com.atakmap.app_preferences.xml", package),
+        format!(
+            "/data/data/{}/shared_prefs/{}_preferences.xml",
+            package, package
+        ),
+        format!(
+            "/data/data/{}/shared_prefs/com.atakmap.app_preferences.xml",
+            package
+        ),
     ];
 
     for pref_path in pref_paths {
@@ -380,7 +396,13 @@ fn pull_tak_server_config(
         let temp_file = std::env::temp_dir().join("atak_prefs.xml");
 
         let status = Command::new("adb")
-            .args(["-s", device, "pull", &pref_path, temp_file.to_str().unwrap()])
+            .args([
+                "-s",
+                device,
+                "pull",
+                &pref_path,
+                temp_file.to_str().unwrap(),
+            ])
             .status();
 
         if let Ok(status) = status {
@@ -494,7 +516,10 @@ fn save_config(config: &OmniTakConfig, output: &Path) -> Result<()> {
 
     for (i, server) in config.servers.iter().enumerate() {
         yaml.push_str(&format!("  - id: {}\n", server.name));
-        yaml.push_str(&format!("    address: \"{}:{}\"\n", server.address, server.port));
+        yaml.push_str(&format!(
+            "    address: \"{}:{}\"\n",
+            server.address, server.port
+        ));
         yaml.push_str(&format!("    protocol: {}\n", server.protocol));
         yaml.push_str("    auto_reconnect: true\n");
         yaml.push_str("    reconnect_delay_ms: 5000\n");
@@ -505,15 +530,36 @@ fn save_config(config: &OmniTakConfig, output: &Path) -> Result<()> {
             // If we have a .p12 file, note that it needs conversion
             if !config.p12_files.is_empty() {
                 let p12_file = &config.p12_files[0];
-                yaml.push_str(&format!("      # IMPORTANT: Convert .p12 to PEM format first:\n"));
-                yaml.push_str(&format!("      # openssl pkcs12 -in {} -out client.pem -clcerts -nokeys\n", p12_file.display()));
-                yaml.push_str(&format!("      # openssl pkcs12 -in {} -out client.key -nocerts -nodes\n", p12_file.display()));
-                yaml.push_str(&format!("      # openssl pkcs12 -in {} -out ca.pem -cacerts -nokeys\n", p12_file.display()));
-                yaml.push_str(&format!("      cert_path: \"{}/client.pem\"\n", config.p12_files[0].parent().unwrap().display()));
-                yaml.push_str(&format!("      key_path: \"{}/client.key\"\n", config.p12_files[0].parent().unwrap().display()));
-                yaml.push_str(&format!("      ca_path: \"{}/ca.pem\"\n", config.p12_files[0].parent().unwrap().display()));
+                yaml.push_str(&format!(
+                    "      # IMPORTANT: Convert .p12 to PEM format first:\n"
+                ));
+                yaml.push_str(&format!(
+                    "      # openssl pkcs12 -in {} -out client.pem -clcerts -nokeys\n",
+                    p12_file.display()
+                ));
+                yaml.push_str(&format!(
+                    "      # openssl pkcs12 -in {} -out client.key -nocerts -nodes\n",
+                    p12_file.display()
+                ));
+                yaml.push_str(&format!(
+                    "      # openssl pkcs12 -in {} -out ca.pem -cacerts -nokeys\n",
+                    p12_file.display()
+                ));
+                yaml.push_str(&format!(
+                    "      cert_path: \"{}/client.pem\"\n",
+                    config.p12_files[0].parent().unwrap().display()
+                ));
+                yaml.push_str(&format!(
+                    "      key_path: \"{}/client.key\"\n",
+                    config.p12_files[0].parent().unwrap().display()
+                ));
+                yaml.push_str(&format!(
+                    "      ca_path: \"{}/ca.pem\"\n",
+                    config.p12_files[0].parent().unwrap().display()
+                ));
             } else if let (Some(cert), Some(key), Some(ca)) =
-                (&config.client_cert, &config.client_key, &config.ca_cert) {
+                (&config.client_cert, &config.client_key, &config.ca_cert)
+            {
                 yaml.push_str(&format!("      cert_path: \"{}\"\n", cert.display()));
                 yaml.push_str(&format!("      key_path: \"{}\"\n", key.display()));
                 yaml.push_str(&format!("      ca_path: \"{}\"\n", ca.display()));
@@ -563,8 +609,7 @@ fn save_config(config: &OmniTakConfig, output: &Path) -> Result<()> {
     yaml.push_str("  enabled: true\n");
 
     // Write to file
-    fs::write(output, yaml)
-        .context("Failed to write configuration file")?;
+    fs::write(output, yaml).context("Failed to write configuration file")?;
 
     Ok(())
 }

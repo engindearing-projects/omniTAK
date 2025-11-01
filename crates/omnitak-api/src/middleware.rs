@@ -3,18 +3,18 @@
 use crate::auth::AuthService;
 use crate::types::{AuditLogEntry, ErrorResponse, UserRole};
 use axum::{
+    Json,
     body::Body,
     extract::{ConnectInfo, Request, State},
     http::{HeaderValue, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
-    Json,
 };
 use dashmap::DashMap;
 use governor::{
-    clock::DefaultClock,
-    state::{direct::NotKeyed, InMemoryState},
     Quota, RateLimiter,
+    clock::DefaultClock,
+    state::{InMemoryState, direct::NotKeyed},
 };
 use std::net::SocketAddr;
 use std::num::NonZeroU32;
@@ -282,10 +282,7 @@ pub async fn timeout_middleware(request: Request, next: Next) -> Response {
         Ok(response) => response,
         Err(_) => {
             warn!("Request timeout");
-            let error = ErrorResponse::new(
-                "request_timeout",
-                "Request took too long to process",
-            );
+            let error = ErrorResponse::new("request_timeout", "Request took too long to process");
             (StatusCode::REQUEST_TIMEOUT, Json(error)).into_response()
         }
     }

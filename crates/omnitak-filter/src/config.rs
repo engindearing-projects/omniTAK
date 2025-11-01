@@ -134,14 +134,23 @@ impl FilterConfig {
         match self {
             FilterConfig::Affiliation { allow } => {
                 if allow.is_empty() {
-                    return Err(anyhow!("Affiliation filter must have at least one allowed value"));
+                    return Err(anyhow!(
+                        "Affiliation filter must have at least one allowed value"
+                    ));
                 }
                 // Validate affiliation strings
                 for aff in allow {
                     if !matches!(
                         aff.to_lowercase().as_str(),
-                        "pending" | "unknown" | "assumedfriend" | "friend" | "neutral"
-                            | "suspect" | "hostile" | "joker" | "faker"
+                        "pending"
+                            | "unknown"
+                            | "assumedfriend"
+                            | "friend"
+                            | "neutral"
+                            | "suspect"
+                            | "hostile"
+                            | "joker"
+                            | "faker"
                     ) {
                         warn!("Unknown affiliation value: {}", aff);
                     }
@@ -150,14 +159,15 @@ impl FilterConfig {
             }
             FilterConfig::Dimension { allow } => {
                 if allow.is_empty() {
-                    return Err(anyhow!("Dimension filter must have at least one allowed value"));
+                    return Err(anyhow!(
+                        "Dimension filter must have at least one allowed value"
+                    ));
                 }
                 Ok(())
             }
             FilterConfig::Group { pattern } => {
                 // Validate regex pattern
-                regex::Regex::new(pattern)
-                    .context("Invalid regex pattern for group filter")?;
+                regex::Regex::new(pattern).context("Invalid regex pattern for group filter")?;
                 Ok(())
             }
             FilterConfig::Team { teams } => {

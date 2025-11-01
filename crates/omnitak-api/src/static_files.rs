@@ -1,11 +1,11 @@
 //! Static file serving with embedded assets
 
 use axum::{
+    Router,
     body::Body,
-    http::{header, HeaderValue, Response, StatusCode, Uri},
+    http::{HeaderValue, Response, StatusCode, Uri, header},
     response::IntoResponse,
     routing::get,
-    Router,
 };
 use rust_embed::RustEmbed;
 use std::borrow::Cow;
@@ -73,10 +73,7 @@ async fn serve_static_file(uri: Uri) -> impl IntoResponse {
                 Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-                    .header(
-                        header::CACHE_CONTROL,
-                        HeaderValue::from_static("no-cache"),
-                    )
+                    .header(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))
                     .body(body)
                     .unwrap()
             } else {
@@ -128,9 +125,7 @@ fn mime_type_for_path(path: &str) -> &'static str {
 
 /// List all embedded files (useful for debugging)
 pub fn list_embedded_files() -> Vec<String> {
-    StaticAssets::iter()
-        .map(|path| path.into_owned())
-        .collect()
+    StaticAssets::iter().map(|path| path.into_owned()).collect()
 }
 
 // ============================================================================
@@ -171,7 +166,10 @@ mod tests {
         );
         assert_eq!(mime_type_for_path("data.json"), "application/json");
         assert_eq!(mime_type_for_path("image.png"), "image/png");
-        assert_eq!(mime_type_for_path("unknown.xyz"), "application/octet-stream");
+        assert_eq!(
+            mime_type_for_path("unknown.xyz"),
+            "application/octet-stream"
+        );
     }
 
     #[test]

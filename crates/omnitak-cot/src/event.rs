@@ -132,7 +132,13 @@ impl Point {
 
     /// Create a new Point with specified accuracy
     pub fn with_accuracy(lat: f64, lon: f64, hae: f64, ce: f64, le: f64) -> Self {
-        Self { lat, lon, hae, ce, le }
+        Self {
+            lat,
+            lon,
+            hae,
+            ce,
+            le,
+        }
     }
 }
 
@@ -142,10 +148,22 @@ mod tests {
 
     #[test]
     fn test_affiliation_parsing() {
-        assert_eq!(Affiliation::from_cot_type("a-f-G"), Some(Affiliation::Friend));
-        assert_eq!(Affiliation::from_cot_type("a-h-G"), Some(Affiliation::Hostile));
-        assert_eq!(Affiliation::from_cot_type("a-n-G"), Some(Affiliation::Neutral));
-        assert_eq!(Affiliation::from_cot_type("a-u-G"), Some(Affiliation::Unknown));
+        assert_eq!(
+            Affiliation::from_cot_type("a-f-G"),
+            Some(Affiliation::Friend)
+        );
+        assert_eq!(
+            Affiliation::from_cot_type("a-h-G"),
+            Some(Affiliation::Hostile)
+        );
+        assert_eq!(
+            Affiliation::from_cot_type("a-n-G"),
+            Some(Affiliation::Neutral)
+        );
+        assert_eq!(
+            Affiliation::from_cot_type("a-u-G"),
+            Some(Affiliation::Unknown)
+        );
         assert_eq!(Affiliation::from_cot_type("invalid"), None);
     }
 

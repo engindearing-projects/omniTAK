@@ -149,21 +149,15 @@ pub trait TakClient: Send + Sync {
 }
 
 /// Helper function to calculate exponential backoff duration
-pub fn calculate_backoff(
-    attempt: u32,
-    config: &ReconnectConfig,
-) -> Duration {
-    let backoff_secs = config.initial_backoff.as_secs_f64()
-        * config.backoff_multiplier.powi(attempt as i32);
+pub fn calculate_backoff(attempt: u32, config: &ReconnectConfig) -> Duration {
+    let backoff_secs =
+        config.initial_backoff.as_secs_f64() * config.backoff_multiplier.powi(attempt as i32);
     let capped_secs = backoff_secs.min(config.max_backoff.as_secs_f64());
     Duration::from_secs_f64(capped_secs)
 }
 
 /// Auto-reconnect helper that wraps connection attempts with retry logic
-pub async fn connect_with_retry<F, Fut>(
-    mut connect_fn: F,
-    config: &ReconnectConfig,
-) -> Result<()>
+pub async fn connect_with_retry<F, Fut>(mut connect_fn: F, config: &ReconnectConfig) -> Result<()>
 where
     F: FnMut() -> Fut,
     Fut: std::future::Future<Output = Result<()>>,
@@ -180,8 +174,7 @@ where
                 if attempt > 0 {
                     info!(
                         attempt = attempt,
-                        "Successfully reconnected after {} attempts",
-                        attempt
+                        "Successfully reconnected after {} attempts", attempt
                     );
                 }
                 return Ok(());

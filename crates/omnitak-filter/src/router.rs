@@ -167,10 +167,7 @@ impl RouteTable {
 
         order.insert(insert_pos, route_id);
 
-        debug!(
-            route_count = order.len(),
-            "Route added to table"
-        );
+        debug!(route_count = order.len(), "Route added to table");
     }
 
     /// Remove a route from the table
@@ -245,11 +242,7 @@ impl RouteTable {
         let route_order = self.route_order.read();
         route_order
             .iter()
-            .filter_map(|id| {
-                self.routes
-                    .get(id)
-                    .map(|route| (id.clone(), route.stats()))
-            })
+            .filter_map(|id| self.routes.get(id).map(|route| (id.clone(), route.stats())))
             .collect()
     }
 

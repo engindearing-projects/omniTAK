@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime};
 
 /// Connection state for a TAK client
@@ -176,8 +176,7 @@ impl ConnectionMetrics {
 
     /// Get connection duration (if connected)
     pub fn connection_duration(&self) -> Option<Duration> {
-        self.connected_at()
-            .and_then(|t| t.elapsed().ok())
+        self.connected_at().and_then(|t| t.elapsed().ok())
     }
 
     /// Get a snapshot of current metrics

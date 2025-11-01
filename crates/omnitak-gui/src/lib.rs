@@ -4,7 +4,9 @@
 //! OmniTAK server connections, viewing status, and monitoring message flow.
 
 use eframe::egui;
-use omnitak_core::types::{ConnectionId, ConnectionMetadata, Protocol, ServerConfig, ServerStatus, TlsConfig};
+use omnitak_core::types::{
+    ConnectionId, ConnectionMetadata, Protocol, ServerConfig, ServerStatus, TlsConfig,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -15,10 +17,10 @@ mod ui;
 use ui::*;
 
 pub mod backend;
-use backend::{BackendService, BackendCommand, BackendEvent};
+use backend::{BackendCommand, BackendEvent, BackendService};
 
 pub mod config_io;
-pub use config_io::{ConfigFile, import_config, export_config};
+pub use config_io::{export_config, import_config, ConfigFile};
 
 /// Main application state for the OmniTAK GUI.
 pub struct OmniTakApp {
@@ -184,19 +186,38 @@ impl ServerDialogState {
 
     /// Creates a dialog for editing an existing server.
     pub fn edit(index: usize, config: ServerConfig) -> Self {
-        let (tls_enabled, ca_cert_path, client_cert_path, client_key_path, verify_cert, server_name) =
-            if let Some(tls) = &config.tls {
-                (
-                    true,
-                    tls.ca_cert_path.to_string_lossy().to_string(),
-                    tls.client_cert_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
-                    tls.client_key_path.as_ref().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
-                    tls.verify_cert,
-                    tls.server_name.clone().unwrap_or_default(),
-                )
-            } else {
-                (false, String::new(), String::new(), String::new(), true, String::new())
-            };
+        let (
+            tls_enabled,
+            ca_cert_path,
+            client_cert_path,
+            client_key_path,
+            verify_cert,
+            server_name,
+        ) = if let Some(tls) = &config.tls {
+            (
+                true,
+                tls.ca_cert_path.to_string_lossy().to_string(),
+                tls.client_cert_path
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default(),
+                tls.client_key_path
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default(),
+                tls.verify_cert,
+                tls.server_name.clone().unwrap_or_default(),
+            )
+        } else {
+            (
+                false,
+                String::new(),
+                String::new(),
+                String::new(),
+                true,
+                String::new(),
+            )
+        };
 
         Self {
             editing_index: Some(index),
@@ -276,7 +297,8 @@ impl OmniTakApp {
     /// Shows a status message to the user
     pub fn show_status(&mut self, message: String, level: StatusLevel, duration_secs: u64) {
         self.status_message = Some((message, level));
-        self.status_message_expiry = Some(std::time::Instant::now() + Duration::from_secs(duration_secs));
+        self.status_message_expiry =
+            Some(std::time::Instant::now() + Duration::from_secs(duration_secs));
     }
 
     /// Clears the status message if expired
@@ -380,30 +402,36 @@ impl OmniTakApp {
     }
 
     /// Updates connection metadata.
-    pub fn update_connection_metadata(&mut self, server_name: String, metadata: ConnectionMetadata) {
+    pub fn update_connection_metadata(
+        &mut self,
+        server_name: String,
+        metadata: ConnectionMetadata,
+    ) {
         let mut state = self.state.lock().unwrap();
         state.connections.insert(server_name, metadata);
 
         // Update metrics
-        state.metrics.active_connections = state.connections.values()
+        state.metrics.active_connections = state
+            .connections
+            .values()
             .filter(|m| m.status == ServerStatus::Connected)
             .count();
-        state.metrics.failed_connections = state.connections.values()
+        state.metrics.failed_connections = state
+            .connections
+            .values()
             .filter(|m| m.status == ServerStatus::Failed)
             .count();
 
-        state.metrics.total_messages_received = state.connections.values()
+        state.metrics.total_messages_received = state
+            .connections
+            .values()
             .map(|m| m.messages_received)
             .sum();
-        state.metrics.total_messages_sent = state.connections.values()
-            .map(|m| m.messages_sent)
-            .sum();
-        state.metrics.total_bytes_received = state.connections.values()
-            .map(|m| m.bytes_received)
-            .sum();
-        state.metrics.total_bytes_sent = state.connections.values()
-            .map(|m| m.bytes_sent)
-            .sum();
+        state.metrics.total_messages_sent =
+            state.connections.values().map(|m| m.messages_sent).sum();
+        state.metrics.total_bytes_received =
+            state.connections.values().map(|m| m.bytes_received).sum();
+        state.metrics.total_bytes_sent = state.connections.values().map(|m| m.bytes_sent).sum();
     }
 
     /// Adds a message to the log.
@@ -424,7 +452,10 @@ impl OmniTakApp {
 
         // Validate before exporting
         if let Err(errors) = config.validate() {
-            return Err(anyhow::anyhow!("Configuration validation failed: {:?}", errors));
+            return Err(anyhow::anyhow!(
+                "Configuration validation failed: {:?}",
+                errors
+            ));
         }
 
         export_config(&config, path)?;
@@ -437,7 +468,10 @@ impl OmniTakApp {
 
         // Validate before importing
         if let Err(errors) = config.validate() {
-            return Err(anyhow::anyhow!("Configuration validation failed: {:?}", errors));
+            return Err(anyhow::anyhow!(
+                "Configuration validation failed: {:?}",
+                errors
+            ));
         }
 
         let mut state = self.state.lock().unwrap();
@@ -453,7 +487,10 @@ impl OmniTakApp {
 
         // Validate before importing
         if let Err(errors) = config.validate() {
-            return Err(anyhow::anyhow!("Configuration validation failed: {:?}", errors));
+            return Err(anyhow::anyhow!(
+                "Configuration validation failed: {:?}",
+                errors
+            ));
         }
 
         let mut state = self.state.lock().unwrap();
@@ -479,32 +516,45 @@ impl eframe::App for OmniTakApp {
 
                 ui.separator();
 
-                if ui.selectable_label(self.ui_state.selected_tab == Tab::Dashboard, "📊 Dashboard").clicked() {
+                if ui
+                    .selectable_label(self.ui_state.selected_tab == Tab::Dashboard, "📊 Dashboard")
+                    .clicked()
+                {
                     self.ui_state.selected_tab = Tab::Dashboard;
                 }
 
-                if ui.selectable_label(self.ui_state.selected_tab == Tab::Connections, "🔌 Connections").clicked() {
+                if ui
+                    .selectable_label(
+                        self.ui_state.selected_tab == Tab::Connections,
+                        "🔌 Connections",
+                    )
+                    .clicked()
+                {
                     self.ui_state.selected_tab = Tab::Connections;
                 }
 
-                if ui.selectable_label(self.ui_state.selected_tab == Tab::Messages, "💬 Messages").clicked() {
+                if ui
+                    .selectable_label(self.ui_state.selected_tab == Tab::Messages, "💬 Messages")
+                    .clicked()
+                {
                     self.ui_state.selected_tab = Tab::Messages;
                 }
 
-                if ui.selectable_label(self.ui_state.selected_tab == Tab::Settings, "⚙ Settings").clicked() {
+                if ui
+                    .selectable_label(self.ui_state.selected_tab == Tab::Settings, "⚙ Settings")
+                    .clicked()
+                {
                     self.ui_state.selected_tab = Tab::Settings;
                 }
             });
         });
 
         // Main content
-        egui::CentralPanel::default().show(ctx, |ui| {
-            match self.ui_state.selected_tab {
-                Tab::Dashboard => ui::dashboard::show(ui, &self.state),
-                Tab::Connections => ui::connections::show(ui, self),
-                Tab::Messages => ui::messages::show(ui, &self.state, &mut self.ui_state),
-                Tab::Settings => ui::settings::show(ui, self),
-            }
+        egui::CentralPanel::default().show(ctx, |ui| match self.ui_state.selected_tab {
+            Tab::Dashboard => ui::dashboard::show(ui, &self.state),
+            Tab::Connections => ui::connections::show(ui, self),
+            Tab::Messages => ui::messages::show(ui, &self.state, &mut self.ui_state),
+            Tab::Settings => ui::settings::show(ui, self),
         });
 
         // Bottom status bar

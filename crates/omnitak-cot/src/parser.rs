@@ -55,21 +55,23 @@ pub fn parse_cot_bytes(xml: &[u8]) -> Result<Event, ParseError> {
                     b"event" => {
                         // Parse event attributes
                         for attr in e.attributes() {
-                            let attr = attr.map_err(|e| ParseError::XmlError(quick_xml::Error::InvalidAttr(e)))?;
+                            let attr = attr.map_err(|e| {
+                                ParseError::XmlError(quick_xml::Error::InvalidAttr(e))
+                            })?;
                             match attr.key.as_ref() {
                                 b"version" => {
                                     version = Some(
-                                        String::from_utf8_lossy(attr.value.as_ref()).into_owned()
+                                        String::from_utf8_lossy(attr.value.as_ref()).into_owned(),
                                     );
                                 }
                                 b"uid" => {
                                     uid = Some(
-                                        String::from_utf8_lossy(attr.value.as_ref()).into_owned()
+                                        String::from_utf8_lossy(attr.value.as_ref()).into_owned(),
                                     );
                                 }
                                 b"type" => {
                                     event_type = Some(
-                                        String::from_utf8_lossy(attr.value.as_ref()).into_owned()
+                                        String::from_utf8_lossy(attr.value.as_ref()).into_owned(),
                                     );
                                 }
                                 b"time" => {
@@ -86,7 +88,7 @@ pub fn parse_cot_bytes(xml: &[u8]) -> Result<Event, ParseError> {
                                 }
                                 b"how" => {
                                     how = Some(
-                                        String::from_utf8_lossy(attr.value.as_ref()).into_owned()
+                                        String::from_utf8_lossy(attr.value.as_ref()).into_owned(),
                                     );
                                 }
                                 _ => {}
@@ -102,7 +104,9 @@ pub fn parse_cot_bytes(xml: &[u8]) -> Result<Event, ParseError> {
                         let mut le = None;
 
                         for attr in e.attributes() {
-                            let attr = attr.map_err(|e| ParseError::XmlError(quick_xml::Error::InvalidAttr(e)))?;
+                            let attr = attr.map_err(|e| {
+                                ParseError::XmlError(quick_xml::Error::InvalidAttr(e))
+                            })?;
                             match attr.key.as_ref() {
                                 b"lat" => {
                                     let lat_str = String::from_utf8_lossy(attr.value.as_ref());
@@ -174,7 +178,10 @@ fn parse_f64(s: &str) -> Result<f64, ParseError> {
         .map_err(|_| ParseError::InvalidNumber(s.to_string()))
 }
 
-fn parse_detail(reader: &mut Reader<&[u8]>, buf: &mut Vec<u8>) -> Result<HashMap<String, String>, ParseError> {
+fn parse_detail(
+    reader: &mut Reader<&[u8]>,
+    buf: &mut Vec<u8>,
+) -> Result<HashMap<String, String>, ParseError> {
     let mut detail_map = HashMap::new();
     let mut current_tag = String::new();
     let mut depth = 1;
@@ -192,7 +199,8 @@ fn parse_detail(reader: &mut Reader<&[u8]>, buf: &mut Vec<u8>) -> Result<HashMap
             }
             Ok(XmlEvent::Text(e)) => {
                 if !current_tag.is_empty() {
-                    let text = e.unescape()
+                    let text = e
+                        .unescape()
                         .map_err(|e| ParseError::XmlError(e.into()))?
                         .into_owned();
                     detail_map.insert(current_tag.clone(), text);
