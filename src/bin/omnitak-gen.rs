@@ -124,8 +124,8 @@ impl EntityType {
         let aff_code = affiliation.to_code();
         match self {
             EntityType::Ground => format!("a-{}-G-E-V", aff_code), // Ground Equipment Vehicle
-            EntityType::Air => format!("a-{}-A-M-F", aff_code),     // Air Military Fixed Wing
-            EntityType::Sea => format!("a-{}-S-S-F", aff_code),     // Sea Surface Ship
+            EntityType::Air => format!("a-{}-A-M-F", aff_code),    // Air Military Fixed Wing
+            EntityType::Sea => format!("a-{}-S-S-F", aff_code),    // Sea Surface Ship
         }
     }
 }

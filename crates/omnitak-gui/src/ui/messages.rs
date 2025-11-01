@@ -19,7 +19,9 @@ impl AffiliationColors {
 }
 
 /// Get color and icon for an affiliation string
-fn get_affiliation_display(affiliation: Option<&str>) -> (egui::Color32, &'static str, &'static str) {
+fn get_affiliation_display(
+    affiliation: Option<&str>,
+) -> (egui::Color32, &'static str, &'static str) {
     match affiliation {
         Some("Pending") | Some("pending") => (AffiliationColors::PENDING, "⚫", "Pending"),
         Some("Unknown") | Some("unknown") => (AffiliationColors::UNKNOWN, "🟡", "Unknown"),
@@ -91,7 +93,11 @@ fn show_filter_controls(ui: &mut egui::Ui, ui_state: &mut UiState, messages: &[M
         egui::ComboBox::from_id_source("affiliation_filter")
             .selected_text(format!("{:?}", ui_state.affiliation_filter))
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut ui_state.affiliation_filter, AffiliationFilter::All, "All");
+                ui.selectable_value(
+                    &mut ui_state.affiliation_filter,
+                    AffiliationFilter::All,
+                    "All",
+                );
                 ui.selectable_value(
                     &mut ui_state.affiliation_filter,
                     AffiliationFilter::Friend,
@@ -152,7 +158,10 @@ fn show_filter_controls(ui: &mut egui::Ui, ui_state: &mut UiState, messages: &[M
     });
 
     // Show filter summary
-    let filtered_count = messages.iter().filter(|msg| passes_filters(msg, ui_state)).count();
+    let filtered_count = messages
+        .iter()
+        .filter(|msg| passes_filters(msg, ui_state))
+        .count();
     ui.label(format!(
         "Showing {} of {} messages",
         filtered_count,
@@ -183,7 +192,11 @@ fn show_message_list(ui: &mut egui::Ui, messages: &[MessageLog], ui_state: &mut 
 
 /// Shows a single message in card format
 fn show_message_card(ui: &mut egui::Ui, msg: &MessageLog, ui_state: &mut UiState) {
-    let msg_id = msg.uid.as_ref().map(|s| s.as_str()).unwrap_or(&msg.msg_type);
+    let msg_id = msg
+        .uid
+        .as_ref()
+        .map(|s| s.as_str())
+        .unwrap_or(&msg.msg_type);
     let is_expanded = ui_state.expanded_messages.contains(msg_id);
 
     egui::Frame::none()
@@ -197,19 +210,12 @@ fn show_message_card(ui: &mut egui::Ui, msg: &MessageLog, ui_state: &mut UiState
                 // Affiliation badge
                 let (color, icon, label) = get_affiliation_display(msg.affiliation.as_deref());
                 ui.label(egui::RichText::new(icon).color(color).size(16.0));
-                ui.label(
-                    egui::RichText::new(label)
-                        .color(color)
-                        .strong()
-                );
+                ui.label(egui::RichText::new(label).color(color).strong());
 
                 ui.separator();
 
                 // Timestamp
-                ui.label(
-                    egui::RichText::new(msg.timestamp.format("%H:%M:%S").to_string())
-                        .weak()
-                );
+                ui.label(egui::RichText::new(msg.timestamp.format("%H:%M:%S").to_string()).weak());
 
                 ui.separator();
 
@@ -242,7 +248,11 @@ fn show_message_card(ui: &mut egui::Ui, msg: &MessageLog, ui_state: &mut UiState
                     ui.label(format!("📍 {:.6}, {:.6}", lat, lon));
 
                     // Copy coordinates button
-                    if ui.small_button("📋").on_hover_text("Copy coordinates").clicked() {
+                    if ui
+                        .small_button("📋")
+                        .on_hover_text("Copy coordinates")
+                        .clicked()
+                    {
                         let coords = format!("{:.6}, {:.6}", lat, lon);
                         ui.output_mut(|o| o.copied_text = coords);
                     }
@@ -383,12 +393,15 @@ fn show_statistics_panel(ui: &mut egui::Ui, messages: &[MessageLog], ui_state: &
     }
 
     // Filtered count
-    let filtered_count = messages.iter().filter(|msg| passes_filters(msg, ui_state)).count();
+    let filtered_count = messages
+        .iter()
+        .filter(|msg| passes_filters(msg, ui_state))
+        .count();
     if filtered_count != messages.len() {
         ui.add_space(5.0);
         ui.label(
             egui::RichText::new(format!("Filtered: {} messages", filtered_count))
-                .color(egui::Color32::YELLOW)
+                .color(egui::Color32::YELLOW),
         );
     }
 }
@@ -407,7 +420,8 @@ fn show_message_details_dialog(ctx: &egui::Context, ui_state: &mut UiState) {
                     // Affiliation
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("Affiliation:").strong());
-                        let (color, icon, label) = get_affiliation_display(msg.affiliation.as_deref());
+                        let (color, icon, label) =
+                            get_affiliation_display(msg.affiliation.as_deref());
                         ui.label(egui::RichText::new(icon).color(color));
                         ui.label(egui::RichText::new(label).color(color));
                     });
@@ -481,7 +495,7 @@ fn show_message_details_dialog(ctx: &egui::Context, ui_state: &mut UiState) {
                                     ui.add(
                                         egui::TextEdit::multiline(&mut raw.as_str())
                                             .font(egui::TextStyle::Monospace)
-                                            .desired_width(f32::INFINITY)
+                                            .desired_width(f32::INFINITY),
                                     );
                                 });
                             });
@@ -517,8 +531,16 @@ fn passes_filters(msg: &MessageLog, ui_state: &UiState) -> bool {
         let matches = msg.server.to_lowercase().contains(&filter_lower)
             || msg.content.to_lowercase().contains(&filter_lower)
             || msg.msg_type.to_lowercase().contains(&filter_lower)
-            || msg.uid.as_ref().map(|u| u.to_lowercase().contains(&filter_lower)).unwrap_or(false)
-            || msg.callsign.as_ref().map(|c| c.to_lowercase().contains(&filter_lower)).unwrap_or(false);
+            || msg
+                .uid
+                .as_ref()
+                .map(|u| u.to_lowercase().contains(&filter_lower))
+                .unwrap_or(false)
+            || msg
+                .callsign
+                .as_ref()
+                .map(|c| c.to_lowercase().contains(&filter_lower))
+                .unwrap_or(false);
 
         if !matches {
             return false;
@@ -527,7 +549,11 @@ fn passes_filters(msg: &MessageLog, ui_state: &UiState) -> bool {
 
     // Server filter
     if !ui_state.server_filter.is_empty() {
-        if !msg.server.to_lowercase().contains(&ui_state.server_filter.to_lowercase()) {
+        if !msg
+            .server
+            .to_lowercase()
+            .contains(&ui_state.server_filter.to_lowercase())
+        {
             return false;
         }
     }
@@ -535,12 +561,33 @@ fn passes_filters(msg: &MessageLog, ui_state: &UiState) -> bool {
     // Affiliation filter
     match ui_state.affiliation_filter {
         AffiliationFilter::All => true,
-        AffiliationFilter::Friend => msg.affiliation.as_deref() == Some("Friend") || msg.affiliation.as_deref() == Some("friend"),
-        AffiliationFilter::Hostile => msg.affiliation.as_deref() == Some("Hostile") || msg.affiliation.as_deref() == Some("hostile"),
-        AffiliationFilter::Neutral => msg.affiliation.as_deref() == Some("Neutral") || msg.affiliation.as_deref() == Some("neutral"),
-        AffiliationFilter::Unknown => msg.affiliation.as_deref() == Some("Unknown") || msg.affiliation.as_deref() == Some("unknown"),
-        AffiliationFilter::AssumedFriend => msg.affiliation.as_deref() == Some("Assumed Friend") || msg.affiliation.as_deref() == Some("assumed_friend"),
-        AffiliationFilter::Suspect => msg.affiliation.as_deref() == Some("Suspect") || msg.affiliation.as_deref() == Some("suspect"),
-        AffiliationFilter::Pending => msg.affiliation.as_deref() == Some("Pending") || msg.affiliation.as_deref() == Some("pending"),
+        AffiliationFilter::Friend => {
+            msg.affiliation.as_deref() == Some("Friend")
+                || msg.affiliation.as_deref() == Some("friend")
+        }
+        AffiliationFilter::Hostile => {
+            msg.affiliation.as_deref() == Some("Hostile")
+                || msg.affiliation.as_deref() == Some("hostile")
+        }
+        AffiliationFilter::Neutral => {
+            msg.affiliation.as_deref() == Some("Neutral")
+                || msg.affiliation.as_deref() == Some("neutral")
+        }
+        AffiliationFilter::Unknown => {
+            msg.affiliation.as_deref() == Some("Unknown")
+                || msg.affiliation.as_deref() == Some("unknown")
+        }
+        AffiliationFilter::AssumedFriend => {
+            msg.affiliation.as_deref() == Some("Assumed Friend")
+                || msg.affiliation.as_deref() == Some("assumed_friend")
+        }
+        AffiliationFilter::Suspect => {
+            msg.affiliation.as_deref() == Some("Suspect")
+                || msg.affiliation.as_deref() == Some("suspect")
+        }
+        AffiliationFilter::Pending => {
+            msg.affiliation.as_deref() == Some("Pending")
+                || msg.affiliation.as_deref() == Some("pending")
+        }
     }
 }

@@ -17,6 +17,7 @@ use omnitak_client::{
     tls::{TlsClient, TlsClientConfig},
 };
 use omnitak_pool::{ConnectionPool, FilterRule as PoolFilterRule, MessageDistributor, PoolMessage};
+use quick_xml;
 use serde::Deserialize;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -26,7 +27,6 @@ use tokio_stream::StreamExt;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 use validator::Validate;
-use quick_xml;
 
 // ============================================================================
 // Application State
@@ -707,9 +707,9 @@ async fn send_cot_message(
     use omnitak_pool::DistributionMessage;
 
     // Validate the request
-    request.validate().map_err(|e| {
-        ApiError::BadRequest(format!("Validation failed: {}", e))
-    })?;
+    request
+        .validate()
+        .map_err(|e| ApiError::BadRequest(format!("Validation failed: {}", e)))?;
 
     let message_id = Uuid::new_v4();
     let mut warnings = Vec::new();
@@ -725,7 +725,7 @@ async fn send_cot_message(
     let message_str = request.message.trim();
     if !message_str.starts_with('<') || !message_str.ends_with('>') {
         return Err(ApiError::BadRequest(
-            "Message must be valid XML starting with '<' and ending with '>'".to_string()
+            "Message must be valid XML starting with '<' and ending with '>'".to_string(),
         ));
     }
 
@@ -764,7 +764,8 @@ async fn send_cot_message(
     } else {
         // Broadcasting to all connections
         let connections = state.connections.read().await;
-        let all_ids: Vec<Uuid> = connections.iter()
+        let all_ids: Vec<Uuid> = connections
+            .iter()
             .filter(|c| c.status == ConnectionStatus::Connected)
             .map(|c| c.id)
             .collect();

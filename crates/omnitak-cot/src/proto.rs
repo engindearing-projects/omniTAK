@@ -72,13 +72,14 @@ impl From<&Event> for pb::CotEvent {
                     name: g.name.clone(),
                     role: g.role.clone(),
                 }),
-                precision_location: d.precision_location.as_ref().map(|pl| pb::PrecisionLocation {
-                    geopointsrc: pl.geopointsrc.clone(),
-                    altsrc: pl.altsrc.clone(),
-                }),
-                status: d.status.as_ref().map(|s| pb::Status {
-                    battery: s.battery,
-                }),
+                precision_location: d
+                    .precision_location
+                    .as_ref()
+                    .map(|pl| pb::PrecisionLocation {
+                        geopointsrc: pl.geopointsrc.clone(),
+                        altsrc: pl.altsrc.clone(),
+                    }),
+                status: d.status.as_ref().map(|s| pb::Status { battery: s.battery }),
                 takv: d.takv.as_ref().map(|t| pb::Takv {
                     device: t.device.clone(),
                     platform: t.platform.clone(),
@@ -187,13 +188,13 @@ impl TryFrom<pb::CotEvent> for Event {
                     speed: t.speed,
                     course: t.course,
                 }),
-                shape: None,  // TODO: Parse shape from protobuf
-                link: Vec::new(),  // TODO: Parse links from protobuf
-                color: None,  // TODO: Parse color from protobuf
-                fill_color: None,  // TODO: Parse fill_color from protobuf
+                shape: None,         // TODO: Parse shape from protobuf
+                link: Vec::new(),    // TODO: Parse links from protobuf
+                color: None,         // TODO: Parse color from protobuf
+                fill_color: None,    // TODO: Parse fill_color from protobuf
                 stroke_color: None,  // TODO: Parse stroke_color from protobuf
-                stroke_weight: None,  // TODO: Parse stroke_weight from protobuf
-                labels_on: None,  // TODO: Parse labels_on from protobuf
+                stroke_weight: None, // TODO: Parse stroke_weight from protobuf
+                labels_on: None,     // TODO: Parse labels_on from protobuf
             }),
         })
     }

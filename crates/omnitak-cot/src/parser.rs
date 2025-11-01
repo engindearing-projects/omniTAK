@@ -190,8 +190,16 @@ fn tak_message_to_event(tak_message: pb::TakMessage) -> Result<Event, ParseError
         lat: cot_event.lat,
         lon: cot_event.lon,
         hae: cot_event.hae,
-        ce: if cot_event.ce == 0.0 { 9999999.0 } else { cot_event.ce },
-        le: if cot_event.le == 0.0 { 9999999.0 } else { cot_event.le },
+        ce: if cot_event.ce == 0.0 {
+            9999999.0
+        } else {
+            cot_event.ce
+        },
+        le: if cot_event.le == 0.0 {
+            9999999.0
+        } else {
+            cot_event.le
+        },
     };
 
     Ok(Event {
@@ -240,13 +248,13 @@ fn tak_message_to_event(tak_message: pb::TakMessage) -> Result<Event, ParseError
                 speed: t.speed,
                 course: t.course,
             }),
-            shape: None,  // TODO: Parse shape from protobuf
-            link: Vec::new(),  // TODO: Parse links from protobuf
-            color: None,  // TODO: Parse color from protobuf
-            fill_color: None,  // TODO: Parse fill_color from protobuf
+            shape: None,         // TODO: Parse shape from protobuf
+            link: Vec::new(),    // TODO: Parse links from protobuf
+            color: None,         // TODO: Parse color from protobuf
+            fill_color: None,    // TODO: Parse fill_color from protobuf
             stroke_color: None,  // TODO: Parse stroke_color from protobuf
-            stroke_weight: None,  // TODO: Parse stroke_weight from protobuf
-            labels_on: None,  // TODO: Parse labels_on from protobuf
+            stroke_weight: None, // TODO: Parse stroke_weight from protobuf
+            labels_on: None,     // TODO: Parse labels_on from protobuf
         }),
     })
 }
@@ -406,10 +414,7 @@ fn parse_f64(s: &str) -> Result<f64, ParseError> {
         .map_err(|_| ParseError::InvalidNumber(s.to_string()))
 }
 
-fn parse_detail(
-    reader: &mut Reader<&[u8]>,
-    buf: &mut Vec<u8>,
-) -> Result<Detail, ParseError> {
+fn parse_detail(reader: &mut Reader<&[u8]>, buf: &mut Vec<u8>) -> Result<Detail, ParseError> {
     let mut detail = Detail::default();
     let mut xml_fragments = Vec::new();
     let mut depth = 1;
@@ -625,8 +630,7 @@ fn parse_precision_location(
     }
 
     Ok(PrecisionLocation {
-        geopointsrc: geopointsrc
-            .ok_or_else(|| ParseError::MissingField("geopointsrc".into()))?,
+        geopointsrc: geopointsrc.ok_or_else(|| ParseError::MissingField("geopointsrc".into()))?,
         altsrc: altsrc.ok_or_else(|| ParseError::MissingField("altsrc".into()))?,
     })
 }
@@ -756,7 +760,8 @@ mod tests {
     #[test]
     fn test_parse_any() {
         // Test with XML
-        let xml_event = parse_any(EXAMPLE_COT.as_bytes()).expect("Failed to parse XML via parse_any");
+        let xml_event =
+            parse_any(EXAMPLE_COT.as_bytes()).expect("Failed to parse XML via parse_any");
         assert_eq!(xml_event.uid, "ANDROID-12345678");
 
         // Test with Mesh

@@ -1,6 +1,8 @@
 //! XML serialization for CoT messages
 
-use crate::event::{Contact, Detail, Event, Group, Link, PrecisionLocation, Shape, Status, Takv, Track};
+use crate::event::{
+    Contact, Detail, Event, Group, Link, PrecisionLocation, Shape, Status, Takv, Track,
+};
 use std::fmt::Write;
 
 /// Serialize an Event to XML string
@@ -21,18 +23,16 @@ pub fn serialize_event(event: &Event) -> String {
         event.start.to_rfc3339(),
         event.stale.to_rfc3339(),
         event.how
-    ).unwrap();
+    )
+    .unwrap();
 
     // Point element
     write!(
         xml,
         r#"<point lat="{}" lon="{}" hae="{}" ce="{}" le="{}"/>"#,
-        event.point.lat,
-        event.point.lon,
-        event.point.hae,
-        event.point.ce,
-        event.point.le
-    ).unwrap();
+        event.point.lat, event.point.lon, event.point.hae, event.point.ce, event.point.le
+    )
+    .unwrap();
 
     // Detail section
     if let Some(ref detail) = event.detail {
@@ -122,7 +122,8 @@ fn serialize_group(xml: &mut String, group: &Group) {
         xml,
         r#"<__group name="{}" role="{}"/>"#,
         group.name, group.role
-    ).unwrap();
+    )
+    .unwrap();
 }
 
 fn serialize_track(xml: &mut String, track: &Track) {
@@ -130,7 +131,8 @@ fn serialize_track(xml: &mut String, track: &Track) {
         xml,
         r#"<track speed="{}" course="{}"/>"#,
         track.speed, track.course
-    ).unwrap();
+    )
+    .unwrap();
 }
 
 fn serialize_status(xml: &mut String, status: &Status) {
@@ -142,7 +144,8 @@ fn serialize_takv(xml: &mut String, takv: &Takv) {
         xml,
         r#"<takv device="{}" platform="{}" os="{}" version="{}"/>"#,
         takv.device, takv.platform, takv.os, takv.version
-    ).unwrap();
+    )
+    .unwrap();
 }
 
 fn serialize_precision_location(xml: &mut String, pl: &PrecisionLocation) {
@@ -150,11 +153,17 @@ fn serialize_precision_location(xml: &mut String, pl: &PrecisionLocation) {
         xml,
         r#"<precisionlocation geopointsrc="{}" altsrc="{}"/>"#,
         pl.geopointsrc, pl.altsrc
-    ).unwrap();
+    )
+    .unwrap();
 }
 
 fn serialize_link(xml: &mut String, link: &Link) {
-    write!(xml, r#"<link uid="{}" relation="{}""#, link.uid, link.relation).unwrap();
+    write!(
+        xml,
+        r#"<link uid="{}" relation="{}""#,
+        link.uid, link.relation
+    )
+    .unwrap();
     if let Some(ref link_type) = link.link_type {
         write!(xml, r#" type="{}""#, link_type).unwrap();
     }
@@ -164,12 +173,17 @@ fn serialize_link(xml: &mut String, link: &Link) {
 fn serialize_shape(xml: &mut String, shape: &Shape) {
     write!(xml, "<shape>").unwrap();
     match shape {
-        Shape::Ellipse { major, minor, angle } => {
+        Shape::Ellipse {
+            major,
+            minor,
+            angle,
+        } => {
             write!(
                 xml,
                 r#"<ellipse major="{}" minor="{}" angle="{}"/>"#,
                 major, minor, angle
-            ).unwrap();
+            )
+            .unwrap();
         }
         Shape::Polyline { vertices, closed } => {
             write!(xml, r#"<polyline closed="{}">"#, closed).unwrap();
@@ -178,7 +192,8 @@ fn serialize_shape(xml: &mut String, shape: &Shape) {
                     xml,
                     r#"<vertex lat="{}" lon="{}" hae="{}"/>"#,
                     vertex.lat, vertex.lon, vertex.hae
-                ).unwrap();
+                )
+                .unwrap();
             }
             write!(xml, "</polyline>").unwrap();
         }
@@ -329,7 +344,7 @@ mod tests {
                     ],
                     closed: true,
                 }),
-                color: Some(-16711936), // Green
+                color: Some(-16711936),       // Green
                 fill_color: Some(1342177280), // Semi-transparent green
                 ..Default::default()
             }),
