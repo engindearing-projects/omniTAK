@@ -17,6 +17,7 @@ sudo apt-get install -y \
     libssl-dev \
     libfontconfig1-dev \
     pkg-config \
+    protobuf-compiler \
     build-essential
 
 # Install Rust (if not already installed)
@@ -30,11 +31,12 @@ source $HOME/.cargo/env
 # Install Homebrew (if not already installed)
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
+# Install required dependencies
+brew install protobuf
+
 # Install Rust (if not already installed)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
-
-# No additional system dependencies needed on macOS
 ```
 
 ## Building the GUI

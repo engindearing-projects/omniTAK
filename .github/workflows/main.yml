@@ -33,7 +33,12 @@ jobs:
           libxkbcommon-dev \
           libssl-dev \
           libfontconfig1-dev \
-          pkg-config
+          pkg-config \
+          protobuf-compiler
+
+    - name: Install macOS dependencies
+      if: runner.os == 'macOS'
+      run: brew install protobuf
 
     - name: Cache dependencies
       uses: actions/cache@v4
@@ -112,7 +117,8 @@ jobs:
           libxkbcommon-dev \
           libssl-dev \
           libfontconfig1-dev \
-          pkg-config
+          pkg-config \
+          protobuf-compiler
 
     - name: Install tarpaulin
       run: cargo install cargo-tarpaulin
