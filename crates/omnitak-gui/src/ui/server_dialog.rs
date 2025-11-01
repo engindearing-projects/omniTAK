@@ -5,16 +5,19 @@ use eframe::egui;
 use omnitak_core::types::Protocol;
 
 /// Shows the server add/edit dialog.
-pub fn show(ctx: &egui::Context, app: &mut OmniTakApp, dialog_state: &mut ServerDialogState) {
-    let mut dialog_open = true;
+pub fn show(ctx: &egui::Context, app: &mut OmniTakApp) {
+    // Take ownership of dialog state temporarily to avoid borrow conflicts
+    let Some(mut dialog_state) = app.ui_state.server_dialog.take() else {
+        return;
+    };
     let mut save_clicked = false;
+    let mut close_dialog = false;
 
-    egui::Window::new(if dialog_state.editing_index.is_some() {
+    let response = egui::Window::new(if dialog_state.editing_index.is_some() {
         "Edit Server"
     } else {
         "Add Server"
     })
-    .open(&mut dialog_open)
     .resizable(false)
     .collapsible(false)
     .show(ctx, |ui| {
@@ -144,7 +147,7 @@ pub fn show(ctx: &egui::Context, app: &mut OmniTakApp, dialog_state: &mut Server
             }
 
             if ui.button("Cancel").clicked() {
-                dialog_open = false;
+                close_dialog = true;
             }
         });
 
@@ -155,9 +158,9 @@ pub fn show(ctx: &egui::Context, app: &mut OmniTakApp, dialog_state: &mut Server
         }
     });
 
-    // Handle dialog close
-    if !dialog_open {
-        app.ui_state.server_dialog = None;
+    // Check if window was closed via X button
+    if response.is_none() {
+        close_dialog = true;
     }
 
     // Handle save
@@ -169,7 +172,18 @@ pub fn show(ctx: &egui::Context, app: &mut OmniTakApp, dialog_state: &mut Server
             } else {
                 app.add_server(config);
             }
-            app.ui_state.server_dialog = None;
+            // Dialog closes after save
+            // Don't restore dialog_state, leave it as None
+            return;
         }
     }
+
+    // Handle dialog close
+    if close_dialog {
+        // Don't restore dialog_state, leave it as None
+        return;
+    }
+
+    // Dialog is still open, restore the state
+    app.ui_state.server_dialog = Some(dialog_state);
 }

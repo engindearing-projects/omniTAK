@@ -184,16 +184,22 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
     }
 
     if let Some(idx) = server_to_edit {
-        let state = app.state.lock().unwrap();
-        if let Some(server) = state.servers.get(idx) {
-            app.ui_state.server_dialog = Some(ServerDialogState::edit(idx, server.clone()));
+        let server_opt = {
+            let state = app.state.lock().unwrap();
+            state.servers.get(idx).cloned()
+        };
+        if let Some(server) = server_opt {
+            app.ui_state.server_dialog = Some(ServerDialogState::edit(idx, server));
         }
     }
 
     if let Some(idx) = server_to_connect {
-        let state = app.state.lock().unwrap();
-        if let Some(server) = state.servers.get(idx) {
-            app.connect_server(server.clone());
+        let server_opt = {
+            let state = app.state.lock().unwrap();
+            state.servers.get(idx).cloned()
+        };
+        if let Some(server) = server_opt {
+            app.connect_server(server);
         }
     }
 

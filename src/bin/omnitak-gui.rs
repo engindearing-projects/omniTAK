@@ -19,7 +19,7 @@ fn main() -> Result<(), eframe::Error> {
             .with_min_inner_size([800.0, 600.0])
             .with_icon(
                 // Load icon if available
-                eframe::icon_data::from_png_bytes(&[]).unwrap_or_else(|_| eframe::IconData {
+                eframe::icon_data::from_png_bytes(&[]).unwrap_or_else(|_| egui::IconData {
                     rgba: vec![],
                     width: 0,
                     height: 0,

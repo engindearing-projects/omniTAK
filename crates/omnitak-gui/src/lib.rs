@@ -78,7 +78,7 @@ pub struct AppState {
 }
 
 /// Application metrics.
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct AppMetrics {
     /// Total messages received across all connections
     pub total_messages_received: u64,
@@ -100,7 +100,7 @@ pub struct AppMetrics {
 }
 
 /// Message log entry.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageLog {
     /// Timestamp
     pub timestamp: chrono::DateTime<chrono::Utc>,
@@ -313,27 +313,37 @@ impl OmniTakApp {
 
     /// Processes backend events
     fn process_backend_events(&mut self) {
-        if let Some(backend) = &self.backend {
+        // Collect all events first to avoid borrowing conflicts
+        let events: Vec<BackendEvent> = if let Some(backend) = &self.backend {
+            let mut collected = Vec::new();
             while let Some(event) = backend.try_recv_event() {
-                match event {
-                    BackendEvent::StatusUpdate(server_name, metadata) => {
-                        self.update_connection_metadata(server_name, metadata);
-                    }
-                    BackendEvent::MessageReceived(log) => {
-                        self.add_message_log(log);
-                    }
-                    BackendEvent::Error(server_name, error) => {
-                        tracing::error!("Backend error for {}: {}", server_name, error);
-                        self.show_status(
-                            format!("Error for {}: {}", server_name, error),
-                            StatusLevel::Error,
-                            10,
-                        );
-                    }
-                    BackendEvent::MetricsUpdate(metrics) => {
-                        let mut state = self.state.lock().unwrap();
-                        state.metrics = metrics;
-                    }
+                collected.push(event);
+            }
+            collected
+        } else {
+            Vec::new()
+        };
+
+        // Now process events without holding a reference to backend
+        for event in events {
+            match event {
+                BackendEvent::StatusUpdate(server_name, metadata) => {
+                    self.update_connection_metadata(server_name, metadata);
+                }
+                BackendEvent::MessageReceived(log) => {
+                    self.add_message_log(log);
+                }
+                BackendEvent::Error(server_name, error) => {
+                    tracing::error!("Backend error for {}: {}", server_name, error);
+                    self.show_status(
+                        format!("Error for {}: {}", server_name, error),
+                        StatusLevel::Error,
+                        10,
+                    );
+                }
+                BackendEvent::MetricsUpdate(metrics) => {
+                    let mut state = self.state.lock().unwrap();
+                    state.metrics = metrics;
                 }
             }
         }
@@ -440,8 +450,9 @@ impl OmniTakApp {
         state.message_log.push(log);
 
         // Keep only last 1000 messages
-        if state.message_log.len() > 1000 {
-            state.message_log.drain(0..state.message_log.len() - 1000);
+        let len = state.message_log.len();
+        if len > 1000 {
+            state.message_log.drain(0..len - 1000);
         }
     }
 
@@ -574,8 +585,8 @@ impl eframe::App for OmniTakApp {
         }
 
         // Server dialog (modal)
-        if let Some(dialog_state) = &mut self.ui_state.server_dialog {
-            ui::server_dialog::show(ctx, self, dialog_state);
+        if self.ui_state.server_dialog.is_some() {
+            ui::server_dialog::show(ctx, self);
         }
 
         // Request repaint for real-time updates
