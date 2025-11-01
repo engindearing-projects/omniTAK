@@ -31,7 +31,7 @@ use tracing::Level;
 /// // Validate before use
 /// config.validate().unwrap();
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
     /// Application-wide settings
     #[serde(default)]
@@ -252,20 +252,6 @@ impl AppConfig {
     }
 }
 
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            app: ApplicationConfig::default(),
-            servers: Vec::new(),
-            filters: FilterConfig::default(),
-            logging: LoggingConfig::default(),
-            api: ApiConfig::default(),
-            metrics: MetricsConfig::default(),
-            storage: StorageConfig::default(),
-        }
-    }
-}
-
 /// Application-wide settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationConfig {
@@ -390,21 +376,16 @@ pub enum FilterMode {
 }
 
 /// Filter action.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum FilterAction {
     /// Accept the message
+    #[default]
     Accept,
     /// Reject the message
     Reject,
     /// Modify the message
     Modify,
-}
-
-impl Default for FilterAction {
-    fn default() -> Self {
-        FilterAction::Accept
-    }
 }
 
 /// A single filter rule.
@@ -709,10 +690,11 @@ impl Default for StorageConfig {
 }
 
 /// Storage backend type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum StorageBackend {
     /// In-memory storage (volatile)
+    #[default]
     Memory,
     /// File-based storage
     File,
@@ -720,12 +702,6 @@ pub enum StorageBackend {
     Sqlite,
     /// PostgreSQL database
     Postgres,
-}
-
-impl Default for StorageBackend {
-    fn default() -> Self {
-        StorageBackend::Memory
-    }
 }
 
 #[cfg(test)]
