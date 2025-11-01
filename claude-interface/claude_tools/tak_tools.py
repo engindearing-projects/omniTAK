@@ -4,63 +4,18 @@ Claude Agent SDK Tools for TAK Operations
 Natural language interface for creating TAK objects through Claude Code.
 """
 
+import sys
+import os
 from typing import List, Tuple, Optional
 import asyncio
-import aiohttp
+
+# Add parent directory to path to import omnitak_client
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from omnitak_client import OmniTAKClient, OmniTAKError
 from tak_geometry import (
     CotMessageBuilder, LatLon, Circle, Polygon, Route
 )
-
-
-class OmniTAKClient:
-    """Client for communicating with omniTAK REST API"""
-
-    def __init__(self, base_url: str = "http://localhost:9443"):
-        self.base_url = base_url
-        self.session = None
-
-    async def __aenter__(self):
-        self.session = aiohttp.ClientSession()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
-
-    async def send_cot_message(self, xml_message: str, server_id: Optional[str] = None) -> dict:
-        """
-        Send a CoT message to TAK server(s)
-
-        Args:
-            xml_message: CoT XML message
-            server_id: Optional specific server to send to (broadcasts to all if None)
-
-        Returns:
-            Response from omniTAK API
-        """
-        endpoint = f"{self.base_url}/api/v1/cot/send"
-        payload = {
-            "message": xml_message,
-            "server_id": server_id
-        }
-
-        async with self.session.post(endpoint, json=payload) as response:
-            response.raise_for_status()
-            return await response.json()
-
-    async def get_connections(self) -> List[dict]:
-        """Get list of active TAK server connections"""
-        endpoint = f"{self.base_url}/api/v1/connections"
-        async with self.session.get(endpoint) as response:
-            response.raise_for_status()
-            return await response.json()
-
-    async def get_status(self) -> dict:
-        """Get omniTAK system status"""
-        endpoint = f"{self.base_url}/api/v1/status"
-        async with self.session.get(endpoint) as response:
-            response.raise_for_status()
-            return await response.json()
 
 
 # Claude Agent SDK tool decorators
@@ -100,10 +55,13 @@ async def create_exclusion_zone(
 
     cot_message = builder.create_circle_event(circle, zone_name, color)
 
-    async with OmniTAKClient() as client:
-        result = await client.send_cot_message(cot_message)
+    try:
+        async with OmniTAKClient() as client:
+            result = await client.send_cot_message(cot_message)
 
-    return f"✓ Created {zone_name}: {radius_km}km radius at ({center_lat}, {center_lon}). Sent to {result.get('servers', 'all')} TAK server(s)."
+        return f"✓ Created {zone_name}: {radius_km}km radius at ({center_lat}, {center_lon}). Sent to {result['sent_to_count']} TAK server(s)."
+    except OmniTAKError as e:
+        return f"✗ Failed to create zone: {e}"
 
 
 # @tool
@@ -136,10 +94,13 @@ async def create_area_polygon(
 
     cot_message = builder.create_polygon_event(polygon, area_name, color, filled)
 
-    async with OmniTAKClient() as client:
-        result = await client.send_cot_message(cot_message)
+    try:
+        async with OmniTAKClient() as client:
+            result = await client.send_cot_message(cot_message)
 
-    return f"✓ Created polygon '{area_name}' with {len(vertices)} vertices. Sent to {result.get('servers', 'all')} TAK server(s)."
+        return f"✓ Created polygon '{area_name}' with {len(vertices)} vertices. Sent to {result['sent_to_count']} TAK server(s)."
+    except OmniTAKError as e:
+        return f"✗ Failed to create polygon: {e}"
 
 
 # @tool
@@ -174,12 +135,15 @@ async def create_patrol_route(
 
     cot_messages = builder.create_route_event(route, route_name, color)
 
-    async with OmniTAKClient() as client:
-        # Send all messages (route + waypoints)
-        for msg in cot_messages:
-            await client.send_cot_message(msg)
+    try:
+        async with OmniTAKClient() as client:
+            # Send all messages (route + waypoints)
+            for msg in cot_messages:
+                await client.send_cot_message(msg)
 
-    return f"✓ Created route '{route_name}' with {len(waypoints)} waypoints. Sent to TAK server(s)."
+        return f"✓ Created route '{route_name}' with {len(waypoints)} waypoints. Sent to TAK server(s)."
+    except OmniTAKError as e:
+        return f"✗ Failed to create route: {e}"
 
 
 # @tool
@@ -212,10 +176,13 @@ async def place_marker(
 
     cot_message = builder.create_marker_event(position, callsign, marker_type, remarks)
 
-    async with OmniTAKClient() as client:
-        result = await client.send_cot_message(cot_message)
+    try:
+        async with OmniTAKClient() as client:
+            result = await client.send_cot_message(cot_message)
 
-    return f"✓ Placed {marker_type} marker '{callsign}' at ({lat}, {lon}). Sent to {result.get('servers', 'all')} TAK server(s)."
+        return f"✓ Placed {marker_type} marker '{callsign}' at ({lat}, {lon}). Sent to {result['sent_to_count']} TAK server(s)."
+    except OmniTAKError as e:
+        return f"✗ Failed to place marker: {e}"
 
 
 # @tool
@@ -230,24 +197,32 @@ async def get_tak_status() -> str:
         User: "What's the status of our TAK connections?"
         Claude calls: get_tak_status()
     """
-    async with OmniTAKClient() as client:
-        status = await client.get_status()
-        connections = await client.get_connections()
+    try:
+        async with OmniTAKClient() as client:
+            status = await client.get_status()
+            connections = await client.get_connections()
 
-    active = len([c for c in connections if c.get('status') == 'connected'])
-    total = len(connections)
+        active = len([c for c in connections if c.status == 'connected'])
+        total = len(connections)
 
-    result = f"omniTAK Status:\n"
-    result += f"  Active connections: {active}/{total}\n"
-    result += f"  Messages received: {status.get('messages_received', 0)}\n"
-    result += f"  Messages sent: {status.get('messages_sent', 0)}\n\n"
+        result = f"omniTAK Status:\n"
+        result += f"  Version: {status.version}\n"
+        result += f"  Uptime: {status.uptime_seconds}s\n"
+        result += f"  Active connections: {active}/{total}\n"
+        result += f"  Messages processed: {status.messages_processed}\n"
+        result += f"  Messages/sec: {status.messages_per_second:.2f}\n"
+        result += f"  Memory: {status.memory_usage_bytes / 1024 / 1024:.1f} MB\n\n"
 
-    result += "Connections:\n"
-    for conn in connections:
-        status_icon = "✓" if conn.get('status') == 'connected' else "✗"
-        result += f"  {status_icon} {conn.get('id')}: {conn.get('address')} ({conn.get('protocol')})\n"
+        result += "Connections:\n"
+        for conn in connections:
+            status_icon = "✓" if conn.status == 'connected' else "✗"
+            result += f"  {status_icon} {conn.name}: {conn.address} ({conn.connection_type})\n"
+            result += f"      RX: {conn.messages_received} msgs, {conn.bytes_received} bytes\n"
+            result += f"      TX: {conn.messages_sent} msgs, {conn.bytes_sent} bytes\n"
 
-    return result
+        return result
+    except OmniTAKError as e:
+        return f"✗ Failed to get status: {e}"
 
 
 # @tool

@@ -1,0 +1,11 @@
+# OmniTAK Claude Agent SDK Integration Requirements
+
+# Core dependencies
+aiohttp>=3.9.0          # Async HTTP client for omniTAK API
+pydantic>=2.0.0         # Data validation
+
+# Claude Agent SDK (when available)
+# claude-agent-sdk>=0.1.0
+
+# Optional but recommended
+python-dateutil>=2.8.0  # Date/time parsing
