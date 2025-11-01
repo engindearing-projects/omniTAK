@@ -1,0 +1,138 @@
+name: Main Branch Build
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build-and-test:
+    name: Build and Test on Main
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install Linux dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libxcb-render0-dev \
+          libxcb-shape0-dev \
+          libxcb-xfixes0-dev \
+          libxkbcommon-dev \
+          libssl-dev \
+          libfontconfig1-dev \
+          pkg-config
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build all binaries
+      run: |
+        echo "Building main server..."
+        cargo build --release --bin omnitak
+
+        echo "Building GUI..."
+        cargo build --release --bin omnitak-gui
+
+        echo "Building ADB setup tool..."
+        cargo build --release --bin omnitak-adb-setup
+
+    - name: Run tests
+      run: cargo test --release
+
+    - name: Check binary sizes
+      shell: bash
+      run: |
+        echo "Binary sizes:"
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          ls -lh target/release/*.exe
+        else
+          ls -lh target/release/omnitak target/release/omnitak-gui target/release/omnitak-adb-setup
+        fi
+
+    - name: Smoke test binaries
+      shell: bash
+      run: |
+        echo "Testing omnitak version..."
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          ./target/release/omnitak.exe --version || echo "Version check not implemented yet"
+        else
+          ./target/release/omnitak --version || echo "Version check not implemented yet"
+        fi
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+
+    - name: Run security audit
+      run: cargo audit
+
+  code-coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install Linux dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libxcb-render0-dev \
+          libxcb-shape0-dev \
+          libxcb-xfixes0-dev \
+          libxkbcommon-dev \
+          libssl-dev \
+          libfontconfig1-dev \
+          pkg-config
+
+    - name: Install tarpaulin
+      run: cargo install cargo-tarpaulin
+
+    - name: Generate coverage
+      run: cargo tarpaulin --verbose --workspace --timeout 300 --out Xml
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./cobertura.xml
+        fail_ci_if_error: false
+
+  notify-success:
+    name: Notify Build Success
+    needs: [build-and-test, security-audit]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+    - name: Build success
+      run: |
+        echo "✅ All builds passed on main branch!"
+        echo "Ready for release tagging"

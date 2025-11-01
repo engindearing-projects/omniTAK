@@ -1,0 +1,173 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: OmniTAK ${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: false
+          body: |
+            # OmniTAK ${{ steps.get_version.outputs.version }}
+
+            ## What's New
+            See [CHANGELOG_GUI.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG_GUI.md) for details.
+
+            ## Download
+            Choose the appropriate binary for your platform:
+            - **Linux (x86_64)**: `omnitak-linux-x86_64.tar.gz`
+            - **macOS (Intel)**: `omnitak-macos-x86_64.tar.gz`
+            - **macOS (Apple Silicon)**: `omnitak-macos-aarch64.tar.gz`
+
+            ## Installation
+            ```bash
+            # Extract the archive
+            tar -xzf omnitak-*.tar.gz
+
+            # Run the GUI
+            ./omnitak-gui
+
+            # Or run the server
+            ./omnitak --config config.yaml
+            ```
+
+            ## Documentation
+            - [GUI Setup Guide](https://github.com/${{ github.repository }}/blob/main/docs/GUI_SETUP.md)
+            - [GUI Features Guide](https://github.com/${{ github.repository }}/blob/main/docs/GUI_FEATURES.md)
+            - [ADB Setup Guide](https://github.com/${{ github.repository }}/blob/main/docs/ADB_SETUP.md)
+
+  build-release:
+    name: Build Release
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: omnitak-linux-x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: omnitak-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: omnitak-macos-aarch64
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Install Linux dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libxcb-render0-dev \
+          libxcb-shape0-dev \
+          libxcb-xfixes0-dev \
+          libxkbcommon-dev \
+          libssl-dev \
+          libfontconfig1-dev \
+          pkg-config
+
+    - name: Build release binaries
+      run: cargo build --release --target ${{ matrix.target }}
+
+    - name: Package binaries
+      shell: bash
+      run: |
+        mkdir -p package
+        cd package
+
+        # Copy binaries
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          cp ../target/${{ matrix.target }}/release/omnitak.exe .
+          cp ../target/${{ matrix.target }}/release/omnitak-gui.exe .
+          cp ../target/${{ matrix.target }}/release/omnitak-adb-setup.exe .
+        else
+          cp ../target/${{ matrix.target }}/release/omnitak .
+          cp ../target/${{ matrix.target }}/release/omnitak-gui .
+          cp ../target/${{ matrix.target }}/release/omnitak-adb-setup .
+          chmod +x omnitak omnitak-gui omnitak-adb-setup
+        fi
+
+        # Copy documentation
+        cp ../README.md .
+        cp ../CHANGELOG_GUI.md .
+        cp -r ../docs .
+        cp ../config.example.yaml .
+
+        # Copy licenses if they exist
+        cp ../LICENSE-* . 2>/dev/null || true
+
+        # Create archive
+        cd ..
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          7z a ${{ matrix.artifact_name }}.zip package/*
+          echo "ASSET=${{ matrix.artifact_name }}.zip" >> $GITHUB_ENV
+        else
+          tar -czf ${{ matrix.artifact_name }}.tar.gz -C package .
+          echo "ASSET=${{ matrix.artifact_name }}.tar.gz" >> $GITHUB_ENV
+        fi
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./${{ env.ASSET }}
+        asset_name: ${{ env.ASSET }}
+        asset_content_type: application/gzip
+
+  build-checksums:
+    name: Generate Checksums
+    needs: build-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Generate checksums
+        run: |
+          sha256sum omnitak-*/*.tar.gz > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload checksums
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./SHA256SUMS.txt
+          asset_name: SHA256SUMS.txt
+          asset_content_type: text/plain
