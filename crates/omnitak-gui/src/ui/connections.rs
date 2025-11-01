@@ -33,6 +33,8 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
 
     let mut server_to_remove: Option<usize> = None;
     let mut server_to_edit: Option<usize> = None;
+    let mut server_to_connect: Option<usize> = None;
+    let mut server_to_disconnect: Option<String> = None;
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         for (idx, server) in servers_clone.iter().enumerate() {
@@ -105,6 +107,23 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
                                 server_to_edit = Some(idx);
                             }
 
+                            // Connect/Disconnect button
+                            if let Some(metadata) = connections_clone.get(&server.name) {
+                                if metadata.status == ServerStatus::Connected {
+                                    if ui.button("⏸ Disconnect").clicked() {
+                                        server_to_disconnect = Some(server.name.clone());
+                                    }
+                                } else if metadata.status != ServerStatus::Reconnecting {
+                                    if ui.button("▶ Connect").clicked() {
+                                        server_to_connect = Some(idx);
+                                    }
+                                }
+                            } else if server.enabled {
+                                if ui.button("▶ Connect").clicked() {
+                                    server_to_connect = Some(idx);
+                                }
+                            }
+
                             // Enable/disable toggle
                             let enabled_text = if server.enabled { "Enabled" } else { "Disabled" };
                             let enabled_color = if server.enabled {
@@ -123,6 +142,14 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
 
     // Handle actions
     if let Some(idx) = server_to_remove {
+        // Disconnect before removing
+        let server_name = {
+            let state = app.state.lock().unwrap();
+            state.servers.get(idx).map(|s| s.name.clone())
+        };
+        if let Some(name) = server_name {
+            app.disconnect_server(name);
+        }
         app.remove_server(idx);
     }
 
@@ -131,5 +158,16 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
         if let Some(server) = state.servers.get(idx) {
             app.ui_state.server_dialog = Some(ServerDialogState::edit(idx, server.clone()));
         }
+    }
+
+    if let Some(idx) = server_to_connect {
+        let state = app.state.lock().unwrap();
+        if let Some(server) = state.servers.get(idx) {
+            app.connect_server(server.clone());
+        }
+    }
+
+    if let Some(server_name) = server_to_disconnect {
+        app.disconnect_server(server_name);
     }
 }

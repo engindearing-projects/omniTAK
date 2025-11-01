@@ -14,14 +14,49 @@ use std::time::Duration;
 mod ui;
 use ui::*;
 
+pub mod backend;
+use backend::{BackendService, BackendCommand, BackendEvent};
+
+pub mod config_io;
+pub use config_io::{ConfigFile, import_config, export_config};
+
 /// Main application state for the OmniTAK GUI.
-#[derive(Default)]
 pub struct OmniTakApp {
     /// Configuration state
     pub state: Arc<Mutex<AppState>>,
 
     /// UI state
     pub ui_state: UiState,
+
+    /// Backend service
+    pub backend: Option<BackendService>,
+
+    /// Status message for user notifications
+    pub status_message: Option<(String, StatusLevel)>,
+
+    /// Timestamp for status message expiry
+    pub status_message_expiry: Option<std::time::Instant>,
+}
+
+/// Status message level
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusLevel {
+    Info,
+    Success,
+    Warning,
+    Error,
+}
+
+impl Default for OmniTakApp {
+    fn default() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(AppState::default())),
+            ui_state: UiState::default(),
+            backend: None,
+            status_message: None,
+            status_message_expiry: None,
+        }
+    }
 }
 
 /// Application state (shared between UI and backend).
@@ -214,12 +249,111 @@ impl OmniTakApp {
             Default::default()
         };
 
+        // Initialize backend service
+        let backend = match BackendService::new() {
+            Ok(service) => {
+                tracing::info!("Backend service initialized");
+                Some(service)
+            }
+            Err(e) => {
+                tracing::error!("Failed to initialize backend service: {}", e);
+                None
+            }
+        };
+
         Self {
             state: Arc::new(Mutex::new(state)),
             ui_state: UiState {
                 auto_scroll: true,
                 ..Default::default()
             },
+            backend,
+            status_message: None,
+            status_message_expiry: None,
+        }
+    }
+
+    /// Shows a status message to the user
+    pub fn show_status(&mut self, message: String, level: StatusLevel, duration_secs: u64) {
+        self.status_message = Some((message, level));
+        self.status_message_expiry = Some(std::time::Instant::now() + Duration::from_secs(duration_secs));
+    }
+
+    /// Clears the status message if expired
+    fn check_status_expiry(&mut self) {
+        if let Some(expiry) = self.status_message_expiry {
+            if std::time::Instant::now() > expiry {
+                self.status_message = None;
+                self.status_message_expiry = None;
+            }
+        }
+    }
+
+    /// Processes backend events
+    fn process_backend_events(&mut self) {
+        if let Some(backend) = &self.backend {
+            while let Some(event) = backend.try_recv_event() {
+                match event {
+                    BackendEvent::StatusUpdate(server_name, metadata) => {
+                        self.update_connection_metadata(server_name, metadata);
+                    }
+                    BackendEvent::MessageReceived(log) => {
+                        self.add_message_log(log);
+                    }
+                    BackendEvent::Error(server_name, error) => {
+                        tracing::error!("Backend error for {}: {}", server_name, error);
+                        self.show_status(
+                            format!("Error for {}: {}", server_name, error),
+                            StatusLevel::Error,
+                            10,
+                        );
+                    }
+                    BackendEvent::MetricsUpdate(metrics) => {
+                        let mut state = self.state.lock().unwrap();
+                        state.metrics = metrics;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Connects to a server
+    pub fn connect_server(&mut self, config: ServerConfig) {
+        if let Some(backend) = &self.backend {
+            if let Err(e) = backend.send_command(BackendCommand::Connect(config.clone())) {
+                tracing::error!("Failed to send connect command: {}", e);
+                self.show_status(
+                    format!("Failed to connect to {}", config.name),
+                    StatusLevel::Error,
+                    5,
+                );
+            } else {
+                self.show_status(
+                    format!("Connecting to {}...", config.name),
+                    StatusLevel::Info,
+                    3,
+                );
+            }
+        }
+    }
+
+    /// Disconnects from a server
+    pub fn disconnect_server(&mut self, server_name: String) {
+        if let Some(backend) = &self.backend {
+            if let Err(e) = backend.send_command(BackendCommand::Disconnect(server_name.clone())) {
+                tracing::error!("Failed to send disconnect command: {}", e);
+                self.show_status(
+                    format!("Failed to disconnect from {}", server_name),
+                    StatusLevel::Error,
+                    5,
+                );
+            } else {
+                self.show_status(
+                    format!("Disconnecting from {}...", server_name),
+                    StatusLevel::Info,
+                    3,
+                );
+            }
         }
     }
 
@@ -282,10 +416,62 @@ impl OmniTakApp {
             state.message_log.drain(0..state.message_log.len() - 1000);
         }
     }
+
+    /// Exports configuration to a file
+    pub fn export_config(&self, path: &str) -> anyhow::Result<()> {
+        let state = self.state.lock().unwrap();
+        let config = ConfigFile::new(state.servers.clone());
+
+        // Validate before exporting
+        if let Err(errors) = config.validate() {
+            return Err(anyhow::anyhow!("Configuration validation failed: {:?}", errors));
+        }
+
+        export_config(&config, path)?;
+        Ok(())
+    }
+
+    /// Imports configuration from a file
+    pub fn import_config(&mut self, path: &str) -> anyhow::Result<usize> {
+        let config = import_config(path)?;
+
+        // Validate before importing
+        if let Err(errors) = config.validate() {
+            return Err(anyhow::anyhow!("Configuration validation failed: {:?}", errors));
+        }
+
+        let mut state = self.state.lock().unwrap();
+        let imported_count = config.servers.len();
+        state.servers.extend(config.servers);
+
+        Ok(imported_count)
+    }
+
+    /// Replaces all server configurations with imported ones
+    pub fn import_config_replace(&mut self, path: &str) -> anyhow::Result<usize> {
+        let config = import_config(path)?;
+
+        // Validate before importing
+        if let Err(errors) = config.validate() {
+            return Err(anyhow::anyhow!("Configuration validation failed: {:?}", errors));
+        }
+
+        let mut state = self.state.lock().unwrap();
+        let imported_count = config.servers.len();
+        state.servers = config.servers;
+
+        Ok(imported_count)
+    }
 }
 
 impl eframe::App for OmniTakApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Process backend events
+        self.process_backend_events();
+
+        // Check status message expiry
+        self.check_status_expiry();
+
         // Top panel with tabs
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
@@ -317,9 +503,25 @@ impl eframe::App for OmniTakApp {
                 Tab::Dashboard => ui::dashboard::show(ui, &self.state),
                 Tab::Connections => ui::connections::show(ui, self),
                 Tab::Messages => ui::messages::show(ui, &self.state, &mut self.ui_state),
-                Tab::Settings => ui::settings::show(ui, &self.state),
+                Tab::Settings => ui::settings::show(ui, self),
             }
         });
+
+        // Bottom status bar
+        if let Some((message, level)) = &self.status_message {
+            egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let (icon, color) = match level {
+                        StatusLevel::Info => ("ℹ", egui::Color32::LIGHT_BLUE),
+                        StatusLevel::Success => ("✓", egui::Color32::GREEN),
+                        StatusLevel::Warning => ("⚠", egui::Color32::YELLOW),
+                        StatusLevel::Error => ("✗", egui::Color32::RED),
+                    };
+                    ui.colored_label(color, icon);
+                    ui.label(message);
+                });
+            });
+        }
 
         // Server dialog (modal)
         if let Some(dialog_state) = &mut self.ui_state.server_dialog {
