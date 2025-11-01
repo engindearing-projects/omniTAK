@@ -39,7 +39,11 @@ impl std::fmt::Debug for FilterRule {
             Self::NeverSend => write!(f, "NeverSend"),
             Self::ByType(types) => f.debug_tuple("ByType").field(types).finish(),
             Self::ByCallsign(pattern) => f.debug_tuple("ByCallsign").field(pattern).finish(),
-            Self::ByGeoBounds { lat, lon, radius_km } => f
+            Self::ByGeoBounds {
+                lat,
+                lon,
+                radius_km,
+            } => f
                 .debug_struct("ByGeoBounds")
                 .field("lat", lat)
                 .field("lon", lon)
@@ -236,28 +240,16 @@ impl MessageDistributor {
                         if batch.len() >= config.batch_size
                             || last_flush.elapsed() >= config.flush_interval
                         {
-                            Self::distribute_batch(
-                                &pool,
-                                &filters,
-                                &metrics,
-                                &config,
-                                &mut batch,
-                            )
-                            .await;
+                            Self::distribute_batch(&pool, &filters, &metrics, &config, &mut batch)
+                                .await;
                             last_flush = Instant::now();
                         }
                     }
                     Err(flume::RecvTimeoutError::Timeout) => {
                         // Flush any pending messages
                         if !batch.is_empty() {
-                            Self::distribute_batch(
-                                &pool,
-                                &filters,
-                                &metrics,
-                                &config,
-                                &mut batch,
-                            )
-                            .await;
+                            Self::distribute_batch(&pool, &filters, &metrics, &config, &mut batch)
+                                .await;
                             last_flush = Instant::now();
                         }
                     }
@@ -323,14 +315,15 @@ impl MessageDistributor {
 
                 // Attempt to send based on strategy
                 let send_result: Result<(), String> = match config.strategy {
-                    DistributionStrategy::DropOnFull => {
-                        connection.tx.try_send(PoolMessage::Cot(msg.data.clone()))
-                            .map_err(|e| e.to_string())
-                    }
-                    DistributionStrategy::BlockOnFull => {
-                        connection.tx.send_async(PoolMessage::Cot(msg.data.clone())).await
-                            .map_err(|e| e.to_string())
-                    }
+                    DistributionStrategy::DropOnFull => connection
+                        .tx
+                        .try_send(PoolMessage::Cot(msg.data.clone()))
+                        .map_err(|e| e.to_string()),
+                    DistributionStrategy::BlockOnFull => connection
+                        .tx
+                        .send_async(PoolMessage::Cot(msg.data.clone()))
+                        .await
+                        .map_err(|e| e.to_string()),
                     DistributionStrategy::TryForTimeout(timeout) => {
                         tokio::select! {
                             result = connection.tx.send_async(PoolMessage::Cot(msg.data.clone())) => {

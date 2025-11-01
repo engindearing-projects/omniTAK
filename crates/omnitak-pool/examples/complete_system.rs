@@ -11,10 +11,9 @@
 //! Run with: cargo run --example complete_system
 
 use omnitak_pool::{
-    AggregatorConfig, ConcurrencyConfig, ConcurrencyLimiter, DistributionStrategy,
-    DistributorConfig, FilterRule, HealthConfig, HealthMonitor, InboundMessage,
-    MessageAggregator, MessageDistributor, MetricsConfig, MetricsRegistry, PoolConfig,
-    ConnectionPool,
+    AggregatorConfig, ConcurrencyConfig, ConcurrencyLimiter, ConnectionPool, DistributionStrategy,
+    DistributorConfig, FilterRule, HealthConfig, HealthMonitor, InboundMessage, MessageAggregator,
+    MessageDistributor, MetricsConfig, MetricsRegistry, PoolConfig,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,9 +23,7 @@ use tracing::{info, Level};
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     info!("Starting OmniTAK Connection Pool System");
 
@@ -50,10 +47,7 @@ async fn main() -> anyhow::Result<()> {
         auto_reconnect: true,
     }));
 
-    info!(
-        "Connection pool created with max {} connections",
-        10_000
-    );
+    info!("Connection pool created with max {} connections", 10_000);
 
     // 3. Create concurrency limiter
     let limiter = Arc::new(ConcurrencyLimiter::new(ConcurrencyConfig {
@@ -283,7 +277,10 @@ async fn main() -> anyhow::Result<()> {
     info!("Final Statistics:");
     info!("  Total Connections: {}", final_stats.total_connections);
     info!("  Messages Sent: {}", final_stats.total_messages_sent);
-    info!("  Messages Received: {}", final_stats.total_messages_received);
+    info!(
+        "  Messages Received: {}",
+        final_stats.total_messages_received
+    );
     info!("  Total Errors: {}", final_stats.total_errors);
 
     let final_snapshot = metrics.snapshot();

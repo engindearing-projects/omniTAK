@@ -1,6 +1,6 @@
 //! Dashboard view showing system overview and metrics.
 
-use crate::{AppState, format_bytes, format_duration};
+use crate::{format_bytes, format_duration, AppState};
 use eframe::egui;
 use omnitak_core::types::ServerStatus;
 use std::sync::{Arc, Mutex};
@@ -14,23 +14,58 @@ pub fn show(ui: &mut egui::Ui, state: &Arc<Mutex<AppState>>) {
 
     // Metrics cards
     ui.horizontal(|ui| {
-        metric_card(ui, "Active Connections", &state.metrics.active_connections.to_string(), egui::Color32::GREEN);
-        metric_card(ui, "Failed Connections", &state.metrics.failed_connections.to_string(), egui::Color32::RED);
-        metric_card(ui, "Total Servers", &state.servers.len().to_string(), egui::Color32::BLUE);
+        metric_card(
+            ui,
+            "Active Connections",
+            &state.metrics.active_connections.to_string(),
+            egui::Color32::GREEN,
+        );
+        metric_card(
+            ui,
+            "Failed Connections",
+            &state.metrics.failed_connections.to_string(),
+            egui::Color32::RED,
+        );
+        metric_card(
+            ui,
+            "Total Servers",
+            &state.servers.len().to_string(),
+            egui::Color32::BLUE,
+        );
     });
 
     ui.add_space(10.0);
 
     ui.horizontal(|ui| {
-        metric_card(ui, "Messages Received", &state.metrics.total_messages_received.to_string(), egui::Color32::LIGHT_BLUE);
-        metric_card(ui, "Messages Sent", &state.metrics.total_messages_sent.to_string(), egui::Color32::LIGHT_GREEN);
+        metric_card(
+            ui,
+            "Messages Received",
+            &state.metrics.total_messages_received.to_string(),
+            egui::Color32::LIGHT_BLUE,
+        );
+        metric_card(
+            ui,
+            "Messages Sent",
+            &state.metrics.total_messages_sent.to_string(),
+            egui::Color32::LIGHT_GREEN,
+        );
     });
 
     ui.add_space(10.0);
 
     ui.horizontal(|ui| {
-        metric_card(ui, "Bytes Received", &format_bytes(state.metrics.total_bytes_received), egui::Color32::from_rgb(100, 150, 255));
-        metric_card(ui, "Bytes Sent", &format_bytes(state.metrics.total_bytes_sent), egui::Color32::from_rgb(100, 255, 150));
+        metric_card(
+            ui,
+            "Bytes Received",
+            &format_bytes(state.metrics.total_bytes_received),
+            egui::Color32::from_rgb(100, 150, 255),
+        );
+        metric_card(
+            ui,
+            "Bytes Sent",
+            &format_bytes(state.metrics.total_bytes_sent),
+            egui::Color32::from_rgb(100, 255, 150),
+        );
     });
 
     ui.add_space(20.0);
@@ -63,7 +98,10 @@ pub fn show(ui: &mut egui::Ui, state: &Arc<Mutex<AppState>>) {
                     };
                     ui.colored_label(status_color, status_text);
 
-                    ui.label(format!("{} ↓ / {} ↑", metadata.messages_received, metadata.messages_sent));
+                    ui.label(format!(
+                        "{} ↓ / {} ↑",
+                        metadata.messages_received, metadata.messages_sent
+                    ));
 
                     if let Some(uptime) = metadata.uptime() {
                         ui.label(format_duration(uptime));
@@ -85,7 +123,11 @@ pub fn show(ui: &mut egui::Ui, state: &Arc<Mutex<AppState>>) {
     if state.servers.is_empty() {
         ui.vertical_centered(|ui| {
             ui.add_space(50.0);
-            ui.label(egui::RichText::new("No servers configured").size(16.0).color(egui::Color32::GRAY));
+            ui.label(
+                egui::RichText::new("No servers configured")
+                    .size(16.0)
+                    .color(egui::Color32::GRAY),
+            );
             ui.label("Go to the Connections tab to add servers");
         });
     }
@@ -99,7 +141,11 @@ fn metric_card(ui: &mut egui::Ui, title: &str, value: &str, color: egui::Color32
         .inner_margin(15.0)
         .show(ui, |ui| {
             ui.vertical(|ui| {
-                ui.label(egui::RichText::new(title).size(12.0).color(egui::Color32::GRAY));
+                ui.label(
+                    egui::RichText::new(title)
+                        .size(12.0)
+                        .color(egui::Color32::GRAY),
+                );
                 ui.label(egui::RichText::new(value).size(24.0).strong().color(color));
             });
         });

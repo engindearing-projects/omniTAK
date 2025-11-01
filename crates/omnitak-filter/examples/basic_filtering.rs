@@ -115,10 +115,7 @@ fn main() {
         .build();
 
     let result = table.route(&friendly_msg);
-    println!(
-        "  Friendly message routed to: {:?}",
-        result.destinations
-    );
+    println!("  Friendly message routed to: {:?}", result.destinations);
     println!("  Matched routes: {:?}", result.matched_routes);
 
     let result = table.route(&hostile_msg);

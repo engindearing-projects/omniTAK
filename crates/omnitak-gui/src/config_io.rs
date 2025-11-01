@@ -52,7 +52,10 @@ impl ConfigFile {
             .iter()
             .enumerate()
             .filter_map(|(idx, server)| {
-                server.validate().err().map(|e| format!("Server {}: {}", idx, e))
+                server
+                    .validate()
+                    .err()
+                    .map(|e| format!("Server {}: {}", idx, e))
             })
             .collect();
 
@@ -95,8 +98,8 @@ impl ConfigFormat {
 
 /// Imports configuration from a file
 pub fn import_config<P: AsRef<Path>>(path: P) -> anyhow::Result<ConfigFile> {
-    let format = ConfigFormat::from_path(&path)
-        .ok_or_else(|| anyhow::anyhow!("Unsupported file format"))?;
+    let format =
+        ConfigFormat::from_path(&path).ok_or_else(|| anyhow::anyhow!("Unsupported file format"))?;
 
     match format {
         ConfigFormat::Yaml => ConfigFile::load_from_yaml(path),
@@ -106,8 +109,8 @@ pub fn import_config<P: AsRef<Path>>(path: P) -> anyhow::Result<ConfigFile> {
 
 /// Exports configuration to a file
 pub fn export_config<P: AsRef<Path>>(config: &ConfigFile, path: P) -> anyhow::Result<()> {
-    let format = ConfigFormat::from_path(&path)
-        .ok_or_else(|| anyhow::anyhow!("Unsupported file format"))?;
+    let format =
+        ConfigFormat::from_path(&path).ok_or_else(|| anyhow::anyhow!("Unsupported file format"))?;
 
     match format {
         ConfigFormat::Yaml => config.save_to_yaml(path),
@@ -122,33 +125,38 @@ mod tests {
 
     #[test]
     fn test_config_format_detection() {
-        assert_eq!(ConfigFormat::from_path("config.yaml"), Some(ConfigFormat::Yaml));
-        assert_eq!(ConfigFormat::from_path("config.yml"), Some(ConfigFormat::Yaml));
-        assert_eq!(ConfigFormat::from_path("config.json"), Some(ConfigFormat::Json));
+        assert_eq!(
+            ConfigFormat::from_path("config.yaml"),
+            Some(ConfigFormat::Yaml)
+        );
+        assert_eq!(
+            ConfigFormat::from_path("config.yml"),
+            Some(ConfigFormat::Yaml)
+        );
+        assert_eq!(
+            ConfigFormat::from_path("config.json"),
+            Some(ConfigFormat::Json)
+        );
         assert_eq!(ConfigFormat::from_path("config.txt"), None);
     }
 
     #[test]
     fn test_config_validation() {
-        let config = ConfigFile::new(vec![
-            ServerConfig::builder()
-                .name("test")
-                .host("localhost")
-                .port(8089)
-                .protocol(Protocol::Tcp)
-                .build(),
-        ]);
+        let config = ConfigFile::new(vec![ServerConfig::builder()
+            .name("test")
+            .host("localhost")
+            .port(8089)
+            .protocol(Protocol::Tcp)
+            .build()]);
 
         assert!(config.validate().is_ok());
 
-        let invalid_config = ConfigFile::new(vec![
-            ServerConfig::builder()
-                .name("")
-                .host("localhost")
-                .port(8089)
-                .protocol(Protocol::Tcp)
-                .build(),
-        ]);
+        let invalid_config = ConfigFile::new(vec![ServerConfig::builder()
+            .name("")
+            .host("localhost")
+            .port(8089)
+            .protocol(Protocol::Tcp)
+            .build()]);
 
         assert!(invalid_config.validate().is_err());
     }

@@ -98,12 +98,7 @@ impl DeduplicationCache {
     /// Check if message is duplicate and record it
     ///
     /// Returns true if message is a duplicate (should be dropped)
-    fn check_and_record(
-        &self,
-        uid: MessageUid,
-        source: ConnectionId,
-        hash: u64,
-    ) -> bool {
+    fn check_and_record(&self, uid: MessageUid, source: ConnectionId, hash: u64) -> bool {
         let now = Instant::now();
 
         // Check if UID exists in cache
@@ -293,7 +288,10 @@ impl MessageAggregator {
                     Some(uid) => uid,
                     None => {
                         // No UID found - forward message anyway
-                        debug!(worker_id, "Message has no UID, forwarding without deduplication");
+                        debug!(
+                            worker_id,
+                            "Message has no UID, forwarding without deduplication"
+                        );
                         metrics.record_no_uid();
 
                         let dist_msg = DistributionMessage {
@@ -313,7 +311,8 @@ impl MessageAggregator {
                 let hash = Self::calculate_hash(&msg.data);
 
                 // Check for duplicate
-                let is_duplicate = dedup_cache.check_and_record(uid.clone(), msg.source.clone(), hash);
+                let is_duplicate =
+                    dedup_cache.check_and_record(uid.clone(), msg.source.clone(), hash);
 
                 if is_duplicate {
                     metrics.record_duplicate();
@@ -433,18 +432,10 @@ mod tests {
     fn test_dedup_cache_basic() {
         let cache = DeduplicationCache::new(100, Duration::from_secs(60));
 
-        let is_dup = cache.check_and_record(
-            "uid-1".to_string(),
-            "conn-1".to_string(),
-            12345,
-        );
+        let is_dup = cache.check_and_record("uid-1".to_string(), "conn-1".to_string(), 12345);
         assert!(!is_dup);
 
-        let is_dup = cache.check_and_record(
-            "uid-1".to_string(),
-            "conn-2".to_string(),
-            12345,
-        );
+        let is_dup = cache.check_and_record("uid-1".to_string(), "conn-2".to_string(), 12345);
         assert!(is_dup);
     }
 
@@ -452,20 +443,12 @@ mod tests {
     fn test_dedup_cache_expiration() {
         let cache = DeduplicationCache::new(100, Duration::from_millis(100));
 
-        let is_dup = cache.check_and_record(
-            "uid-1".to_string(),
-            "conn-1".to_string(),
-            12345,
-        );
+        let is_dup = cache.check_and_record("uid-1".to_string(), "conn-1".to_string(), 12345);
         assert!(!is_dup);
 
         std::thread::sleep(Duration::from_millis(150));
 
-        let is_dup = cache.check_and_record(
-            "uid-1".to_string(),
-            "conn-2".to_string(),
-            12345,
-        );
+        let is_dup = cache.check_and_record("uid-1".to_string(), "conn-2".to_string(), 12345);
         assert!(!is_dup); // Expired, treated as new
     }
 

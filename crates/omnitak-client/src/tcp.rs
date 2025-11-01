@@ -1,8 +1,9 @@
 use crate::client::{
-    calculate_backoff, ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, TakClient,
+    ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, TakClient,
+    calculate_backoff,
 };
 use crate::state::{ConnectionState, ConnectionStatus};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
 use std::sync::Arc;
@@ -154,8 +155,7 @@ impl TcpClient {
                         if attempt > 0 {
                             info!(
                                 attempt = attempt,
-                                "Successfully reconnected after {} attempts",
-                                attempt
+                                "Successfully reconnected after {} attempts", attempt
                             );
                         }
                         break Ok(());
@@ -211,10 +211,7 @@ impl TcpClient {
     }
 
     /// Read a newline-delimited frame
-    async fn read_newline_frame(
-        &mut self,
-        buffer: &mut BytesMut,
-    ) -> Result<Option<bytes::Bytes>> {
+    async fn read_newline_frame(&mut self, buffer: &mut BytesMut) -> Result<Option<bytes::Bytes>> {
         let stream = self
             .stream
             .as_mut()
@@ -230,7 +227,9 @@ impl TcpClient {
                     frame_bytes.truncate(frame_bytes.len() - 1);
                 }
 
-                self.status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                self.status
+                    .metrics()
+                    .record_bytes_received(frame_bytes.len() as u64);
                 return Ok(Some(frame_bytes));
             }
 
@@ -240,13 +239,10 @@ impl TcpClient {
             }
 
             // Read more data
-            let read_result = timeout(
-                self.config.base.read_timeout,
-                stream.read_buf(buffer),
-            )
-            .await
-            .context("Read timeout")?
-            .context("Read error")?;
+            let read_result = timeout(self.config.base.read_timeout, stream.read_buf(buffer))
+                .await
+                .context("Read timeout")?
+                .context("Read error")?;
 
             if read_result == 0 {
                 if buffer.is_empty() {
@@ -283,7 +279,9 @@ impl TcpClient {
                 if buffer.len() >= 4 + frame_length {
                     buffer.advance(4); // Skip length header
                     let frame = buffer.split_to(frame_length).freeze();
-                    self.status.metrics().record_bytes_received(frame.len() as u64);
+                    self.status
+                        .metrics()
+                        .record_bytes_received(frame.len() as u64);
                     return Ok(Some(frame));
                 }
             }
@@ -294,13 +292,10 @@ impl TcpClient {
             }
 
             // Read more data
-            let read_result = timeout(
-                self.config.base.read_timeout,
-                stream.read_buf(buffer),
-            )
-            .await
-            .context("Read timeout")?
-            .context("Read error")?;
+            let read_result = timeout(self.config.base.read_timeout, stream.read_buf(buffer))
+                .await
+                .context("Read timeout")?
+                .context("Read error")?;
 
             if read_result == 0 {
                 if buffer.is_empty() {
@@ -316,10 +311,7 @@ impl TcpClient {
     /// TAK Protocol: Messages are delimited by the "</event>" token
     /// Per TAK spec: "Messages are delimited and broken apart by searching for
     /// the token '</event>' and breaking apart immediately after that token."
-    pub async fn read_xml_frame(
-        &mut self,
-        buffer: &mut BytesMut,
-    ) -> Result<Option<bytes::Bytes>> {
+    pub async fn read_xml_frame(&mut self, buffer: &mut BytesMut) -> Result<Option<bytes::Bytes>> {
         const XML_END_TOKEN: &[u8] = b"</event>";
 
         let stream = self
@@ -330,7 +322,8 @@ impl TcpClient {
         loop {
             // Search for the complete </event> token
             if buffer.len() >= XML_END_TOKEN.len() {
-                if let Some(pos) = buffer.windows(XML_END_TOKEN.len())
+                if let Some(pos) = buffer
+                    .windows(XML_END_TOKEN.len())
                     .position(|window| window == XML_END_TOKEN)
                 {
                     // Split immediately after the </event> token
@@ -343,7 +336,9 @@ impl TcpClient {
                         continue;
                     }
 
-                    self.status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                    self.status
+                        .metrics()
+                        .record_bytes_received(frame_bytes.len() as u64);
                     return Ok(Some(frame_bytes));
                 }
             }
@@ -354,13 +349,10 @@ impl TcpClient {
             }
 
             // Read more data
-            let read_result = timeout(
-                self.config.base.read_timeout,
-                stream.read_buf(buffer),
-            )
-            .await
-            .context("Read timeout")?
-            .context("Read error")?;
+            let read_result = timeout(self.config.base.read_timeout, stream.read_buf(buffer))
+                .await
+                .context("Read timeout")?
+                .context("Read error")?;
 
             if read_result == 0 {
                 if buffer.is_empty() {
@@ -386,13 +378,10 @@ impl TcpClient {
 
         match self.config.framing {
             FramingMode::Newline => {
-                timeout(
-                    self.config.base.write_timeout,
-                    stream.write_all(data),
-                )
-                .await
-                .context("Write timeout")?
-                .context("Write error")?;
+                timeout(self.config.base.write_timeout, stream.write_all(data))
+                    .await
+                    .context("Write timeout")?
+                    .context("Write error")?;
 
                 timeout(
                     self.config.base.write_timeout,
@@ -414,23 +403,17 @@ impl TcpClient {
                 .context("Write timeout")?
                 .context("Write error")?;
 
-                timeout(
-                    self.config.base.write_timeout,
-                    stream.write_all(data),
-                )
-                .await
-                .context("Write timeout")?
-                .context("Write error")?;
+                timeout(self.config.base.write_timeout, stream.write_all(data))
+                    .await
+                    .context("Write timeout")?
+                    .context("Write error")?;
             }
             FramingMode::Xml => {
                 // For XML framing, write the data as-is (should already be complete XML)
-                timeout(
-                    self.config.base.write_timeout,
-                    stream.write_all(data),
-                )
-                .await
-                .context("Write timeout")?
-                .context("Write error")?;
+                timeout(self.config.base.write_timeout, stream.write_all(data))
+                    .await
+                    .context("Write timeout")?
+                    .context("Write error")?;
             }
         }
 
@@ -502,35 +485,35 @@ impl TcpClient {
         framing: FramingMode,
     ) -> Result<Option<bytes::Bytes>> {
         match framing {
-            FramingMode::Newline => {
-                loop {
-                    if let Some(pos) = buffer.iter().position(|&b| b == NEWLINE_DELIMITER) {
-                        let frame = buffer.split_to(pos + 1);
-                        let mut frame_bytes = frame.freeze();
+            FramingMode::Newline => loop {
+                if let Some(pos) = buffer.iter().position(|&b| b == NEWLINE_DELIMITER) {
+                    let frame = buffer.split_to(pos + 1);
+                    let mut frame_bytes = frame.freeze();
 
-                        if frame_bytes.last() == Some(&NEWLINE_DELIMITER) {
-                            frame_bytes.truncate(frame_bytes.len() - 1);
-                        }
-
-                        status.metrics().record_bytes_received(frame_bytes.len() as u64);
-                        return Ok(Some(frame_bytes));
+                    if frame_bytes.last() == Some(&NEWLINE_DELIMITER) {
+                        frame_bytes.truncate(frame_bytes.len() - 1);
                     }
 
-                    if buffer.len() >= MAX_FRAME_SIZE {
-                        return Err(anyhow!("Frame too large"));
-                    }
+                    status
+                        .metrics()
+                        .record_bytes_received(frame_bytes.len() as u64);
+                    return Ok(Some(frame_bytes));
+                }
 
-                    let n = stream.read_buf(buffer).await.context("Read error")?;
+                if buffer.len() >= MAX_FRAME_SIZE {
+                    return Err(anyhow!("Frame too large"));
+                }
 
-                    if n == 0 {
-                        if buffer.is_empty() {
-                            return Ok(None);
-                        } else {
-                            return Err(anyhow!("Connection closed with incomplete frame"));
-                        }
+                let n = stream.read_buf(buffer).await.context("Read error")?;
+
+                if n == 0 {
+                    if buffer.is_empty() {
+                        return Ok(None);
+                    } else {
+                        return Err(anyhow!("Connection closed with incomplete frame"));
                     }
                 }
-            }
+            },
             FramingMode::LengthPrefixed => {
                 loop {
                     // Check if we have at least 4 bytes for the length header
@@ -579,7 +562,8 @@ impl TcpClient {
                     // Search for the complete </event> token
                     if buffer.len() >= XML_END_TOKEN.len() {
                         // Look for the </event> token in the buffer
-                        if let Some(pos) = buffer.windows(XML_END_TOKEN.len())
+                        if let Some(pos) = buffer
+                            .windows(XML_END_TOKEN.len())
                             .position(|window| window == XML_END_TOKEN)
                         {
                             // Split immediately after the </event> token
@@ -590,11 +574,15 @@ impl TcpClient {
                             // Most CoT messages start with <?xml but some may start directly with <event>
                             if frame_bytes.is_empty() || frame_bytes[0] != b'<' {
                                 // Skip invalid data - continue reading
-                                warn!("Received data not starting with '<', skipping invalid frame");
+                                warn!(
+                                    "Received data not starting with '<', skipping invalid frame"
+                                );
                                 continue;
                             }
 
-                            status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                            status
+                                .metrics()
+                                .record_bytes_received(frame_bytes.len() as u64);
                             return Ok(Some(frame_bytes));
                         }
                     }
@@ -635,8 +623,7 @@ impl TakClient for TcpClient {
                         if attempt > 0 {
                             info!(
                                 attempt = attempt,
-                                "Successfully reconnected after {} attempts",
-                                attempt
+                                "Successfully reconnected after {} attempts", attempt
                             );
                         }
                         break Ok(());
@@ -686,7 +673,10 @@ impl TakClient for TcpClient {
 
         // Close the stream
         if let Some(mut stream) = self.stream.take() {
-            stream.shutdown().await.context("Failed to shutdown stream")?;
+            stream
+                .shutdown()
+                .await
+                .context("Failed to shutdown stream")?;
         }
 
         self.status.set_state(ConnectionState::Disconnected);
@@ -729,9 +719,7 @@ impl TakClient for TcpClient {
                     HealthStatus::Healthy
                 }
             }
-            ConnectionState::Connecting | ConnectionState::Reconnecting => {
-                HealthStatus::Degraded
-            }
+            ConnectionState::Connecting | ConnectionState::Reconnecting => HealthStatus::Degraded,
             ConnectionState::Disconnected => HealthStatus::Disconnected,
             ConnectionState::Failed => HealthStatus::Unhealthy,
         };

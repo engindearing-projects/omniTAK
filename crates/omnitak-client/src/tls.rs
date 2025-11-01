@@ -1,8 +1,9 @@
 use crate::client::{
-    calculate_backoff, ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, TakClient,
+    ClientConfig, CotMessage, HealthCheck, HealthStatus, MessageMetadata, TakClient,
+    calculate_backoff,
 };
 use crate::state::{ConnectionState, ConnectionStatus};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
 use omnitak_cert::{CertificateBundle, CertificateData};
@@ -15,8 +16,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::timeout;
-use tokio_rustls::client::TlsStream;
 use tokio_rustls::TlsConnector;
+use tokio_rustls::client::TlsStream;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -102,7 +103,7 @@ impl TlsClientConfig {
                 },
             },
             server_name: None,
-            tls13_only: false,  // Support both TLS 1.2 and 1.3 for TAK server compatibility
+            tls13_only: false, // Support both TLS 1.2 and 1.3 for TAK server compatibility
             verify_server: true,
             framing: FramingMode::Xml, // Default to XML for TAK servers
         }
@@ -126,7 +127,7 @@ impl TlsClientConfig {
                 },
             },
             server_name: None,
-            tls13_only: false,  // Support both TLS 1.2 and 1.3 for TAK server compatibility
+            tls13_only: false, // Support both TLS 1.2 and 1.3 for TAK server compatibility
             verify_server: true,
             framing: FramingMode::Xml, // Default to XML for TAK servers
         }
@@ -140,7 +141,7 @@ impl TlsClientConfig {
                 source: TlsCertSource::Bundle(bundle),
             },
             server_name: None,
-            tls13_only: false,  // Support both TLS 1.2 and 1.3 for TAK server compatibility
+            tls13_only: false, // Support both TLS 1.2 and 1.3 for TAK server compatibility
             verify_server: true,
             framing: FramingMode::Xml, // Default to XML for TAK servers
         }
@@ -148,7 +149,11 @@ impl TlsClientConfig {
 
     /// Set CA certificate path (only for file-based config)
     pub fn with_ca_cert(mut self, ca_cert_path: PathBuf) -> Self {
-        if let TlsCertSource::Files { ca_cert_path: ref mut ca, .. } = self.cert_config.source {
+        if let TlsCertSource::Files {
+            ca_cert_path: ref mut ca,
+            ..
+        } = self.cert_config.source
+        {
             *ca = Some(ca_cert_path);
         }
         self
@@ -200,11 +205,20 @@ impl TlsClient {
 
         // Load or parse certificate bundle based on source
         let bundle = match &config.cert_config.source {
-            TlsCertSource::Files { cert_path, key_path, ca_cert_path } => {
+            TlsCertSource::Files {
+                cert_path,
+                key_path,
+                ca_cert_path,
+            } => {
                 info!("Loading certificates from files");
                 Self::load_bundle_from_files(cert_path, key_path, ca_cert_path.as_ref())?
             }
-            TlsCertSource::Memory { cert_data, key_data, ca_data, password } => {
+            TlsCertSource::Memory {
+                cert_data,
+                key_data,
+                ca_data,
+                password,
+            } => {
                 info!("Loading certificates from memory");
                 CertificateBundle::from_certificate_data(
                     cert_data,
@@ -232,11 +246,7 @@ impl TlsClient {
             info!("Loaded {} custom CA certificate(s)", ca_certs.len());
         } else {
             // Use system root certificates
-            root_store.extend(
-                webpki_roots::TLS_SERVER_ROOTS
-                    .iter()
-                    .cloned()
-            );
+            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
             info!("Using system root certificates");
         }
 
@@ -271,8 +281,8 @@ impl TlsClient {
         ca_cert_path: Option<&PathBuf>,
     ) -> Result<CertificateBundle> {
         // Load client certificate
-        let cert_file = std::fs::File::open(cert_path)
-            .context("Failed to open client certificate file")?;
+        let cert_file =
+            std::fs::File::open(cert_path).context("Failed to open client certificate file")?;
         let mut cert_reader = BufReader::new(cert_file);
 
         let certs: Vec<CertificateDer> = rustls_pemfile::certs(&mut cert_reader)
@@ -284,8 +294,7 @@ impl TlsClient {
         }
 
         // Load private key
-        let key_file = std::fs::File::open(key_path)
-            .context("Failed to open private key file")?;
+        let key_file = std::fs::File::open(key_path).context("Failed to open private key file")?;
         let mut key_reader = BufReader::new(key_file);
 
         let private_key = rustls_pemfile::private_key(&mut key_reader)
@@ -294,8 +303,8 @@ impl TlsClient {
 
         // Load CA certificate if provided
         let ca_certs = if let Some(ca_path) = ca_cert_path {
-            let ca_cert_file = std::fs::File::open(ca_path)
-                .context("Failed to open CA certificate file")?;
+            let ca_cert_file =
+                std::fs::File::open(ca_path).context("Failed to open CA certificate file")?;
             let mut ca_cert_reader = BufReader::new(ca_cert_file);
 
             let ca_certs: Vec<CertificateDer> = rustls_pemfile::certs(&mut ca_cert_reader)
@@ -320,7 +329,11 @@ impl TlsClient {
 
     /// Extract server name from address
     fn get_server_name(&self) -> Result<ServerName<'static>> {
-        let server_name = self.config.server_name.as_ref().map(|s| s.as_str())
+        let server_name = self
+            .config
+            .server_name
+            .as_ref()
+            .map(|s| s.as_str())
             .unwrap_or_else(|| {
                 // Extract hostname from server_addr
                 self.config
@@ -388,8 +401,7 @@ impl TlsClient {
                         if attempt > 0 {
                             info!(
                                 attempt = attempt,
-                                "Successfully reconnected after {} attempts",
-                                attempt
+                                "Successfully reconnected after {} attempts", attempt
                             );
                         }
                         break Ok(());
@@ -467,7 +479,9 @@ impl TlsClient {
                     frame_bytes.truncate(frame_bytes.len() - 1);
                 }
 
-                self.status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                self.status
+                    .metrics()
+                    .record_bytes_received(frame_bytes.len() as u64);
                 return Ok(Some(frame_bytes));
             }
 
@@ -477,13 +491,10 @@ impl TlsClient {
             }
 
             // Read more data
-            let read_result = timeout(
-                self.config.base.read_timeout,
-                stream.read_buf(buffer),
-            )
-            .await
-            .context("Read timeout")?
-            .context("Read error")?;
+            let read_result = timeout(self.config.base.read_timeout, stream.read_buf(buffer))
+                .await
+                .context("Read timeout")?
+                .context("Read error")?;
 
             if read_result == 0 {
                 if buffer.is_empty() {
@@ -496,7 +507,10 @@ impl TlsClient {
     }
 
     /// Read a length-prefixed frame from the TLS stream
-    async fn read_length_prefixed_frame(&mut self, buffer: &mut BytesMut) -> Result<Option<bytes::Bytes>> {
+    async fn read_length_prefixed_frame(
+        &mut self,
+        buffer: &mut BytesMut,
+    ) -> Result<Option<bytes::Bytes>> {
         let stream = self
             .stream
             .as_mut()
@@ -518,7 +532,9 @@ impl TlsClient {
                 if buffer.len() >= 4 + frame_length {
                     buffer.advance(4); // Skip length header
                     let frame = buffer.split_to(frame_length).freeze();
-                    self.status.metrics().record_bytes_received(frame.len() as u64);
+                    self.status
+                        .metrics()
+                        .record_bytes_received(frame.len() as u64);
                     return Ok(Some(frame));
                 }
             }
@@ -529,13 +545,10 @@ impl TlsClient {
             }
 
             // Read more data
-            let read_result = timeout(
-                self.config.base.read_timeout,
-                stream.read_buf(buffer),
-            )
-            .await
-            .context("Read timeout")?
-            .context("Read error")?;
+            let read_result = timeout(self.config.base.read_timeout, stream.read_buf(buffer))
+                .await
+                .context("Read timeout")?
+                .context("Read error")?;
 
             if read_result == 0 {
                 if buffer.is_empty() {
@@ -562,7 +575,8 @@ impl TlsClient {
         loop {
             // Search for the complete </event> token
             if buffer.len() >= XML_END_TOKEN.len() {
-                if let Some(pos) = buffer.windows(XML_END_TOKEN.len())
+                if let Some(pos) = buffer
+                    .windows(XML_END_TOKEN.len())
                     .position(|window| window == XML_END_TOKEN)
                 {
                     // Split immediately after the </event> token
@@ -575,7 +589,9 @@ impl TlsClient {
                         continue;
                     }
 
-                    self.status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                    self.status
+                        .metrics()
+                        .record_bytes_received(frame_bytes.len() as u64);
                     return Ok(Some(frame_bytes));
                 }
             }
@@ -586,13 +602,10 @@ impl TlsClient {
             }
 
             // Read more data
-            let read_result = timeout(
-                self.config.base.read_timeout,
-                stream.read_buf(buffer),
-            )
-            .await
-            .context("Read timeout")?
-            .context("Read error")?;
+            let read_result = timeout(self.config.base.read_timeout, stream.read_buf(buffer))
+                .await
+                .context("Read timeout")?
+                .context("Read error")?;
 
             if read_result == 0 {
                 if buffer.is_empty() {
@@ -613,13 +626,10 @@ impl TlsClient {
 
         match self.config.framing {
             FramingMode::Newline => {
-                timeout(
-                    self.config.base.write_timeout,
-                    stream.write_all(data),
-                )
-                .await
-                .context("Write timeout")?
-                .context("Write error")?;
+                timeout(self.config.base.write_timeout, stream.write_all(data))
+                    .await
+                    .context("Write timeout")?
+                    .context("Write error")?;
 
                 timeout(
                     self.config.base.write_timeout,
@@ -641,23 +651,17 @@ impl TlsClient {
                 .context("Write timeout")?
                 .context("Write error")?;
 
-                timeout(
-                    self.config.base.write_timeout,
-                    stream.write_all(data),
-                )
-                .await
-                .context("Write timeout")?
-                .context("Write error")?;
+                timeout(self.config.base.write_timeout, stream.write_all(data))
+                    .await
+                    .context("Write timeout")?
+                    .context("Write error")?;
             }
             FramingMode::Xml => {
                 // For XML framing, write the data as-is (should already be complete XML)
-                timeout(
-                    self.config.base.write_timeout,
-                    stream.write_all(data),
-                )
-                .await
-                .context("Write timeout")?
-                .context("Write error")?;
+                timeout(self.config.base.write_timeout, stream.write_all(data))
+                    .await
+                    .context("Write timeout")?
+                    .context("Write error")?;
             }
         }
 
@@ -729,35 +733,35 @@ impl TlsClient {
         framing: FramingMode,
     ) -> Result<Option<bytes::Bytes>> {
         match framing {
-            FramingMode::Newline => {
-                loop {
-                    if let Some(pos) = buffer.iter().position(|&b| b == NEWLINE_DELIMITER) {
-                        let frame = buffer.split_to(pos + 1);
-                        let mut frame_bytes = frame.freeze();
+            FramingMode::Newline => loop {
+                if let Some(pos) = buffer.iter().position(|&b| b == NEWLINE_DELIMITER) {
+                    let frame = buffer.split_to(pos + 1);
+                    let mut frame_bytes = frame.freeze();
 
-                        if frame_bytes.last() == Some(&NEWLINE_DELIMITER) {
-                            frame_bytes.truncate(frame_bytes.len() - 1);
-                        }
-
-                        status.metrics().record_bytes_received(frame_bytes.len() as u64);
-                        return Ok(Some(frame_bytes));
+                    if frame_bytes.last() == Some(&NEWLINE_DELIMITER) {
+                        frame_bytes.truncate(frame_bytes.len() - 1);
                     }
 
-                    if buffer.len() >= MAX_FRAME_SIZE {
-                        return Err(anyhow!("Frame too large"));
-                    }
+                    status
+                        .metrics()
+                        .record_bytes_received(frame_bytes.len() as u64);
+                    return Ok(Some(frame_bytes));
+                }
 
-                    let n = stream.read_buf(buffer).await.context("Read error")?;
+                if buffer.len() >= MAX_FRAME_SIZE {
+                    return Err(anyhow!("Frame too large"));
+                }
 
-                    if n == 0 {
-                        if buffer.is_empty() {
-                            return Ok(None);
-                        } else {
-                            return Err(anyhow!("Connection closed with incomplete frame"));
-                        }
+                let n = stream.read_buf(buffer).await.context("Read error")?;
+
+                if n == 0 {
+                    if buffer.is_empty() {
+                        return Ok(None);
+                    } else {
+                        return Err(anyhow!("Connection closed with incomplete frame"));
                     }
                 }
-            }
+            },
             FramingMode::LengthPrefixed => {
                 loop {
                     // Check if we have at least 4 bytes for the length header
@@ -806,7 +810,8 @@ impl TlsClient {
                     // Search for the complete </event> token
                     if buffer.len() >= XML_END_TOKEN.len() {
                         // Look for the </event> token in the buffer
-                        if let Some(pos) = buffer.windows(XML_END_TOKEN.len())
+                        if let Some(pos) = buffer
+                            .windows(XML_END_TOKEN.len())
                             .position(|window| window == XML_END_TOKEN)
                         {
                             // Split immediately after the </event> token
@@ -817,11 +822,15 @@ impl TlsClient {
                             // Most CoT messages start with <?xml but some may start directly with <event>
                             if frame_bytes.is_empty() || frame_bytes[0] != b'<' {
                                 // Skip invalid data - continue reading
-                                warn!("Received data not starting with '<', skipping invalid frame");
+                                warn!(
+                                    "Received data not starting with '<', skipping invalid frame"
+                                );
                                 continue;
                             }
 
-                            status.metrics().record_bytes_received(frame_bytes.len() as u64);
+                            status
+                                .metrics()
+                                .record_bytes_received(frame_bytes.len() as u64);
                             return Ok(Some(frame_bytes));
                         }
                     }
@@ -862,8 +871,7 @@ impl TakClient for TlsClient {
                         if attempt > 0 {
                             info!(
                                 attempt = attempt,
-                                "Successfully reconnected after {} attempts",
-                                attempt
+                                "Successfully reconnected after {} attempts", attempt
                             );
                         }
                         break Ok(());
@@ -913,7 +921,10 @@ impl TakClient for TlsClient {
 
         // Close the stream
         if let Some(mut stream) = self.stream.take() {
-            stream.shutdown().await.context("Failed to shutdown stream")?;
+            stream
+                .shutdown()
+                .await
+                .context("Failed to shutdown stream")?;
         }
 
         self.status.set_state(ConnectionState::Disconnected);
@@ -956,9 +967,7 @@ impl TakClient for TlsClient {
                     HealthStatus::Healthy
                 }
             }
-            ConnectionState::Connecting | ConnectionState::Reconnecting => {
-                HealthStatus::Degraded
-            }
+            ConnectionState::Connecting | ConnectionState::Reconnecting => HealthStatus::Degraded,
             ConnectionState::Disconnected => HealthStatus::Disconnected,
             ConnectionState::Failed => HealthStatus::Unhealthy,
         };
@@ -998,11 +1007,8 @@ mod tests {
 
     #[test]
     fn test_tls_client_config_builder() {
-        let config = TlsClientConfig::new(
-            PathBuf::from("/cert.pem"),
-            PathBuf::from("/key.pem"),
-        )
-        .with_server_name("example.com".to_string());
+        let config = TlsClientConfig::new(PathBuf::from("/cert.pem"), PathBuf::from("/key.pem"))
+            .with_server_name("example.com".to_string());
 
         assert_eq!(config.server_name, Some("example.com".to_string()));
         assert!(config.tls13_only);

@@ -3,13 +3,13 @@
 use crate::auth::{AuthService, AuthUser};
 use crate::types::{WsClientMessage, WsServerMessage};
 use axum::{
+    Router,
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
     routing::get,
-    Router,
 };
 use futures::{
     sink::SinkExt,
@@ -162,9 +162,7 @@ async fn handle_events_socket(socket: WebSocket, state: WsState) {
 
     // Spawn receiver task (for ping/pong)
     let recv_task = tokio::spawn(handle_receive_events_messages(
-        receiver,
-        client_tx,
-        client_id,
+        receiver, client_tx, client_id,
     ));
 
     // Wait for either task to complete
@@ -383,7 +381,10 @@ impl WsState {
     }
 
     /// Create a test system event for testing
-    pub fn create_test_system_event(event_type: &str, details: serde_json::Value) -> WsServerMessage {
+    pub fn create_test_system_event(
+        event_type: &str,
+        details: serde_json::Value,
+    ) -> WsServerMessage {
         WsServerMessage::SystemEvent {
             event: event_type.to_string(),
             details,

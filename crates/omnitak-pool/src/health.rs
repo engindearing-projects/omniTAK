@@ -249,15 +249,16 @@ impl HealthMonitor {
                     // Check if circuit allows health check
                     let allows_request = {
                         let mut circuits_guard = circuits.write();
-                        let circuit = circuits_guard
-                            .entry(connection.id.clone())
-                            .or_insert_with(|| {
-                                CircuitBreaker::new(
-                                    config.circuit_failure_threshold,
-                                    config.circuit_reset_timeout,
-                                    config.circuit_success_threshold,
-                                )
-                            });
+                        let circuit =
+                            circuits_guard
+                                .entry(connection.id.clone())
+                                .or_insert_with(|| {
+                                    CircuitBreaker::new(
+                                        config.circuit_failure_threshold,
+                                        config.circuit_reset_timeout,
+                                        config.circuit_success_threshold,
+                                    )
+                                });
 
                         // Transition to half-open if ready
                         circuit.check_half_open();
@@ -274,12 +275,9 @@ impl HealthMonitor {
                     }
 
                     // Perform health check
-                    let check_result = Self::perform_health_check(
-                        &pool,
-                        &connection.id,
-                        config.check_timeout,
-                    )
-                    .await;
+                    let check_result =
+                        Self::perform_health_check(&pool, &connection.id, config.check_timeout)
+                            .await;
 
                     // Update circuit breaker
                     let mut circuits_guard = circuits.write();
@@ -294,9 +292,7 @@ impl HealthMonitor {
                                 warn!(connection_id = %connection.id, "Health check failed");
 
                                 // Auto-reconnect if enabled and circuit is open
-                                if config.auto_reconnect
-                                    && circuit.state == CircuitState::Open
-                                {
+                                if config.auto_reconnect && circuit.state == CircuitState::Open {
                                     info!(
                                         connection_id = %connection.id,
                                         "Auto-reconnect would be triggered here"
@@ -340,18 +336,28 @@ impl HealthMonitor {
     }
 
     /// Get health status for a connection
-    pub fn get_health(&self, pool: &ConnectionPool, connection_id: &ConnectionId) -> Option<ConnectionHealth> {
+    pub fn get_health(
+        &self,
+        pool: &ConnectionPool,
+        connection_id: &ConnectionId,
+    ) -> Option<ConnectionHealth> {
         let connection = pool.get_connection(connection_id)?;
 
-        let last_message_millis = connection.state.last_message.load(std::sync::atomic::Ordering::Relaxed);
+        let last_message_millis = connection
+            .state
+            .last_message
+            .load(std::sync::atomic::Ordering::Relaxed);
         let last_message = if last_message_millis > 0 {
-            Some(Instant::now() - Duration::from_millis(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as u64
-                    - last_message_millis,
-            ))
+            Some(
+                Instant::now()
+                    - Duration::from_millis(
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis() as u64
+                            - last_message_millis,
+                    ),
+            )
         } else {
             None
         };
@@ -385,9 +391,18 @@ impl HealthMonitor {
             uptime: connection.created_at.elapsed(),
             successful_checks: 0, // Would track in real implementation
             failed_checks: 0,
-            messages_sent: connection.state.messages_sent.load(std::sync::atomic::Ordering::Relaxed),
-            messages_received: connection.state.messages_received.load(std::sync::atomic::Ordering::Relaxed),
-            errors: connection.state.errors.load(std::sync::atomic::Ordering::Relaxed),
+            messages_sent: connection
+                .state
+                .messages_sent
+                .load(std::sync::atomic::Ordering::Relaxed),
+            messages_received: connection
+                .state
+                .messages_received
+                .load(std::sync::atomic::Ordering::Relaxed),
+            errors: connection
+                .state
+                .errors
+                .load(std::sync::atomic::Ordering::Relaxed),
         })
     }
 
@@ -395,10 +410,7 @@ impl HealthMonitor {
     pub fn get_all_health(&self, pool: &ConnectionPool) -> HashMap<ConnectionId, ConnectionHealth> {
         pool.list_connections()
             .into_iter()
-            .filter_map(|id| {
-                self.get_health(pool, &id)
-                    .map(|health| (id, health))
-            })
+            .filter_map(|id| self.get_health(pool, &id).map(|health| (id, health)))
             .collect()
     }
 

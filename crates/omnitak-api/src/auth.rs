@@ -1,25 +1,24 @@
 //! Authentication and authorization with JWT and API keys
 
 use crate::types::{ErrorResponse, UserRole};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use axum::{
-    async_trait,
+    Json, RequestPartsExt, async_trait,
     extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
+    http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
-    Json, RequestPartsExt,
 };
 use axum_extra::{
-    headers::{authorization::Bearer, Authorization},
     TypedHeader,
+    headers::{Authorization, authorization::Bearer},
 };
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -154,8 +153,8 @@ impl AuthService {
 
     /// Verify a password against a hash
     pub fn verify_password(&self, password: &str, hash: &str) -> Result<bool> {
-        let parsed_hash =
-            PasswordHash::new(hash).map_err(|e| anyhow::anyhow!("Failed to parse password hash: {}", e))?;
+        let parsed_hash = PasswordHash::new(hash)
+            .map_err(|e| anyhow::anyhow!("Failed to parse password hash: {}", e))?;
         let argon2 = Argon2::default();
         Ok(argon2
             .verify_password(password.as_bytes(), &parsed_hash)
@@ -163,12 +162,7 @@ impl AuthService {
     }
 
     /// Create a new user
-    pub fn create_user(
-        &self,
-        username: String,
-        password: &str,
-        role: UserRole,
-    ) -> Result<Uuid> {
+    pub fn create_user(&self, username: String, password: &str, role: UserRole) -> Result<Uuid> {
         if self.users.contains_key(&username) {
             return Err(anyhow!("User already exists"));
         }
@@ -203,11 +197,7 @@ impl AuthService {
             return Err(anyhow!("Invalid credentials"));
         }
 
-        let claims = Claims::new(
-            user.id.to_string(),
-            user.role,
-            self.config.jwt_expiration,
-        );
+        let claims = Claims::new(user.id.to_string(), user.role, self.config.jwt_expiration);
 
         let expires_at = DateTime::from_timestamp(claims.exp, 0)
             .ok_or_else(|| anyhow!("Invalid expiration timestamp"))?;
@@ -220,12 +210,8 @@ impl AuthService {
 
     /// Verify and decode JWT token
     pub fn verify_token(&self, token: &str) -> Result<Claims> {
-        let token_data = decode::<Claims>(
-            token,
-            &self.decoding_key,
-            &Validation::default(),
-        )
-        .context("Invalid JWT token")?;
+        let token_data = decode::<Claims>(token, &self.decoding_key, &Validation::default())
+            .context("Invalid JWT token")?;
 
         Ok(token_data.claims)
     }
@@ -306,9 +292,7 @@ impl AuthService {
     pub fn check_role(&self, user_role: UserRole, required_role: UserRole) -> bool {
         match required_role {
             UserRole::Admin => user_role == UserRole::Admin,
-            UserRole::Operator => {
-                user_role == UserRole::Admin || user_role == UserRole::Operator
-            }
+            UserRole::Operator => user_role == UserRole::Admin || user_role == UserRole::Operator,
             UserRole::ReadOnly => true, // All roles include read-only
         }
     }
@@ -329,9 +313,7 @@ impl AuthUser {
     pub fn has_role(&self, required_role: UserRole) -> bool {
         match required_role {
             UserRole::Admin => self.role == UserRole::Admin,
-            UserRole::Operator => {
-                self.role == UserRole::Admin || self.role == UserRole::Operator
-            }
+            UserRole::Operator => self.role == UserRole::Admin || self.role == UserRole::Operator,
             UserRole::ReadOnly => true,
         }
     }
@@ -367,9 +349,7 @@ where
 
         // Try API key header
         if let Some(api_key) = parts.headers.get("X-API-Key") {
-            let api_key = api_key
-                .to_str()
-                .map_err(|_| AuthError::InvalidApiKey)?;
+            let api_key = api_key.to_str().map_err(|_| AuthError::InvalidApiKey)?;
 
             let auth_service = parts
                 .extensions

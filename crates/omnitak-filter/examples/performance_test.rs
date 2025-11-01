@@ -3,7 +3,7 @@
 //! Run with: cargo run --release --example performance_test
 
 use omnitak_filter::affiliation::CotType;
-use omnitak_filter::fast_path::{fast_extract_affiliation, fast_is_friendly, fast_in_bbox};
+use omnitak_filter::fast_path::{fast_extract_affiliation, fast_in_bbox, fast_is_friendly};
 use omnitak_filter::router::{Route, RouteTableBuilder};
 use omnitak_filter::rules::{AffiliationFilter, CotMessage, FilterRule, GeoBoundingBoxFilter};
 use std::sync::Arc;

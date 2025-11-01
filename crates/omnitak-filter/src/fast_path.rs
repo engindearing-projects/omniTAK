@@ -365,14 +365,8 @@ mod tests {
     #[test]
     fn test_affiliation_lookup_const() {
         // Test that the const lookup array is correctly initialized
-        assert_eq!(
-            AFFILIATION_LOOKUP[b'f' as usize],
-            Some(Affiliation::Friend)
-        );
-        assert_eq!(
-            AFFILIATION_LOOKUP[b'F' as usize],
-            Some(Affiliation::Friend)
-        );
+        assert_eq!(AFFILIATION_LOOKUP[b'f' as usize], Some(Affiliation::Friend));
+        assert_eq!(AFFILIATION_LOOKUP[b'F' as usize], Some(Affiliation::Friend));
         assert_eq!(
             AFFILIATION_LOOKUP[b'h' as usize],
             Some(Affiliation::Hostile)

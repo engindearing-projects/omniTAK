@@ -159,7 +159,9 @@ impl ConcurrencyLimiter {
         let semaphore = Arc::new(Semaphore::new(config.max_concurrent));
 
         let rate_limiter = if config.enable_rate_limit {
-            Some(Arc::new(Semaphore::new(config.rate_limit_ops_per_sec as usize)))
+            Some(Arc::new(Semaphore::new(
+                config.rate_limit_ops_per_sec as usize,
+            )))
         } else {
             None
         };
@@ -177,7 +179,9 @@ impl ConcurrencyLimiter {
     /// Start the concurrency limiter (starts rate limiter refill if enabled)
     pub async fn start(&self) {
         if let Some(rate_limiter) = &self.rate_limiter {
-            let task = self.spawn_rate_limiter_refill(Arc::clone(rate_limiter)).await;
+            let task = self
+                .spawn_rate_limiter_refill(Arc::clone(rate_limiter))
+                .await;
             *self.rate_limiter_task.write() = Some(task);
             info!(
                 ops_per_sec = self.config.rate_limit_ops_per_sec,
@@ -389,11 +393,7 @@ mod tests {
         let permit2 = limiter.acquire().await.unwrap();
 
         // Third acquire should timeout
-        let result = tokio::time::timeout(
-            Duration::from_millis(100),
-            limiter.acquire(),
-        )
-        .await;
+        let result = tokio::time::timeout(Duration::from_millis(100), limiter.acquire()).await;
         assert!(result.is_err());
 
         drop(permit1);

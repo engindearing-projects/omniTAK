@@ -30,25 +30,43 @@ pub fn show(ui: &mut egui::Ui, state: &Arc<Mutex<AppState>>, ui_state: &mut UiSt
     if state.message_log.is_empty() {
         ui.vertical_centered(|ui| {
             ui.add_space(50.0);
-            ui.label(egui::RichText::new("No messages yet").size(16.0).color(egui::Color32::GRAY));
+            ui.label(
+                egui::RichText::new("No messages yet")
+                    .size(16.0)
+                    .color(egui::Color32::GRAY),
+            );
             ui.label("Messages will appear here when connections are active");
         });
         return;
     }
 
-    let filtered_messages: Vec<_> = state.message_log.iter()
+    let filtered_messages: Vec<_> = state
+        .message_log
+        .iter()
         .filter(|msg| {
             if ui_state.message_filter.is_empty() {
                 true
             } else {
-                msg.server.to_lowercase().contains(&ui_state.message_filter.to_lowercase()) ||
-                msg.content.to_lowercase().contains(&ui_state.message_filter.to_lowercase()) ||
-                msg.msg_type.to_lowercase().contains(&ui_state.message_filter.to_lowercase())
+                msg.server
+                    .to_lowercase()
+                    .contains(&ui_state.message_filter.to_lowercase())
+                    || msg
+                        .content
+                        .to_lowercase()
+                        .contains(&ui_state.message_filter.to_lowercase())
+                    || msg
+                        .msg_type
+                        .to_lowercase()
+                        .contains(&ui_state.message_filter.to_lowercase())
             }
         })
         .collect();
 
-    ui.label(format!("Showing {} of {} messages", filtered_messages.len(), state.message_log.len()));
+    ui.label(format!(
+        "Showing {} of {} messages",
+        filtered_messages.len(),
+        state.message_log.len()
+    ));
 
     ui.add_space(5.0);
 
@@ -73,7 +91,7 @@ pub fn show(ui: &mut egui::Ui, state: &Arc<Mutex<AppState>>, ui_state: &mut UiSt
                         ui.label(&msg.server);
                         ui.label(
                             egui::RichText::new(&msg.msg_type)
-                                .background_color(egui::Color32::from_gray(60))
+                                .background_color(egui::Color32::from_gray(60)),
                         );
                         ui.label(&msg.content);
                         ui.end_row();
