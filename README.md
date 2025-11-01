@@ -2,6 +2,10 @@
 
 **Military-Grade TAK Server Aggregator** | **Status: Beta (v0.2.0)**
 
+[![CI](https://github.com/engindearing-projects/omniTAK/workflows/CI/badge.svg)](https://github.com/engindearing-projects/omniTAK/actions)
+[![Release](https://github.com/engindearing-projects/omniTAK/workflows/Release/badge.svg)](https://github.com/engindearing-projects/omniTAK/releases)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+
 OmniTAK is a high-performance, memory-safe TAK (Team Awareness Kit) server aggregator written in Rust. It acts as a multi-protocol client that connects to multiple TAK servers simultaneously, aggregates CoT (Cursor on Target) messages, and intelligently routes them based on configurable filters.
 
 ## Status
@@ -43,7 +47,8 @@ omnitak/
 ├── omnitak-filter      # MIL-STD-2525 filtering & routing
 ├── omnitak-pool        # Connection pool manager
 ├── omnitak-cert        # Certificate management
-└── omnitak-api         # REST API & WebSocket server
+├── omnitak-api         # REST API & WebSocket server
+└── omnitak-gui         # Native desktop GUI (egui/eframe)
 ```
 
 ### Technology Stack
@@ -51,9 +56,87 @@ omnitak/
 - **Async Runtime**: Tokio
 - **TLS**: Rustls (memory-safe, no OpenSSL) - TLS 1.2/1.3 compatible
 - **Web Framework**: Axum
+- **GUI Framework**: egui/eframe (native, cross-platform)
 - **Serialization**: Serde, quick-xml, Protobuf (prost)
 - **Metrics**: Prometheus-compatible
 - **Logging**: Tracing with structured logs
+
+## Installation
+
+### Pre-built Binaries (Recommended)
+
+Download the latest release for your platform:
+
+**[📥 Latest Release](https://github.com/engindearing-projects/omniTAK/releases/latest)**
+
+Available platforms:
+- **Linux (x86_64)**: `omnitak-linux-x86_64.tar.gz`
+- **macOS (Intel)**: `omnitak-macos-x86_64.tar.gz`
+- **macOS (Apple Silicon)**: `omnitak-macos-aarch64.tar.gz`
+
+```bash
+# Download and extract
+tar -xzf omnitak-*.tar.gz
+cd omnitak
+
+# Run the GUI
+./omnitak-gui
+
+# Or run the server
+./omnitak --config config.yaml
+```
+
+### Build from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/engindearing-projects/omniTAK.git
+cd omniTAK
+
+# Build all binaries
+cargo build --release
+
+# Binaries in target/release/
+./target/release/omnitak-gui
+```
+
+See **[Release Process](docs/RELEASE_PROCESS.md)** for build requirements and details.
+
+## Desktop GUI
+
+**NEW**: Native desktop GUI for managing OmniTAK connections!
+
+OmniTAK now includes a native desktop GUI built with Rust (egui/eframe) for easy management of TAK server connections. The GUI provides:
+
+- **Dashboard**: System overview, metrics, and connection status
+- **Connection Management**: Add, edit, and remove TAK servers with TLS configuration
+- **Message Viewer**: Real-time CoT message log with filtering
+- **Settings**: Application configuration and import/export
+- **Status Bar**: Real-time notifications and feedback
+
+### Quick Start (GUI)
+
+**Pre-built Binaries**:
+```bash
+# Download from releases page
+./omnitak-gui
+```
+
+**Build from Source**:
+```bash
+cargo build --bin omnitak-gui --release
+cargo run --bin omnitak-gui --release
+```
+
+**Platform Support**:
+- ✅ Ubuntu/Linux (tested on Ubuntu 20.04+)
+- ✅ macOS (Intel and Apple Silicon)
+- ⏳ Windows (coming soon)
+
+**Documentation**:
+- **[GUI Setup Guide](docs/GUI_SETUP.md)** - Installation and platform-specific setup
+- **[GUI Features Guide](docs/GUI_FEATURES.md)** - Complete feature walkthrough
+- **[Changelog](CHANGELOG_GUI.md)** - Version history and roadmap
 
 ## Easy Setup with ADB (Recommended)
 
