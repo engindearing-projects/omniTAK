@@ -13,8 +13,8 @@ OmniTAK is a high-performance, memory-safe TAK (Team Awareness Kit) server aggre
 **Beta Release (v0.2.0)** - Core functionality complete and tested with:
 - ✅ TAK Server (official) - TLS 1.2 with client certificates
 - ✅ TAKy - Basic TCP connections
+- ✅ OpenTAKServer - TCP connections (tested v1.0+)
 - 🚧 FreeTAKServer - Testing in progress
-- 🚧 OpenTAKServer - Testing in progress
 
 ## Features
 
@@ -131,7 +131,7 @@ cargo run --bin omnitak-gui --release
 **Platform Support**:
 - ✅ Ubuntu/Linux (tested on Ubuntu 20.04+)
 - ✅ macOS (Intel and Apple Silicon)
-- ⏳ Windows (coming soon)
+- ✅ Windows WSL2 (tested on Windows 11 with WSLg)
 
 **Documentation**:
 - **[GUI Setup Guide](docs/GUI_SETUP.md)** - Installation and platform-specific setup
