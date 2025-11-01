@@ -2,7 +2,6 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fmt;
 
 /// CoT Event represents a Cursor on Target message
@@ -25,8 +24,8 @@ pub struct Event {
     pub how: String,
     /// Geographic location and accuracy
     pub point: Point,
-    /// Optional detail section with arbitrary XML data
-    pub detail: Option<HashMap<String, String>>,
+    /// Optional structured detail section
+    pub detail: Option<Detail>,
 }
 
 /// Geographic point with accuracy metrics
@@ -42,6 +41,81 @@ pub struct Point {
     pub ce: f64,
     /// Linear error in meters (95% confidence)
     pub le: f64,
+}
+
+/// Detail section with structured fields
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct Detail {
+    /// Unparsed XML content
+    pub xml_detail: Option<String>,
+    /// Contact information
+    pub contact: Option<Contact>,
+    /// Group information
+    pub group: Option<Group>,
+    /// Precision location source
+    pub precision_location: Option<PrecisionLocation>,
+    /// Status information
+    pub status: Option<Status>,
+    /// TAK version information
+    pub takv: Option<Takv>,
+    /// Track information
+    pub track: Option<Track>,
+}
+
+/// Contact information
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Contact {
+    /// Optional endpoint for communication
+    pub endpoint: Option<String>,
+    /// Callsign for display
+    pub callsign: String,
+}
+
+/// Group information
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Group {
+    /// Group name
+    pub name: String,
+    /// Group role
+    pub role: String,
+}
+
+/// Track information for moving entities
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Track {
+    /// Speed in meters per second
+    pub speed: f64,
+    /// Course/heading in degrees (0-360)
+    pub course: f64,
+}
+
+/// Status information
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Status {
+    /// Battery level (0-100)
+    pub battery: u32,
+}
+
+/// TAK version and device information
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Takv {
+    /// Device identifier
+    pub device: String,
+    /// Platform (e.g., "ATAK", "WinTAK", "iTAK")
+    pub platform: String,
+    /// Operating system
+    pub os: String,
+    /// Version string
+    pub version: String,
+}
+
+/// Precision location source information
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PrecisionLocation {
+    /// Geopoint source (e.g., "GPS", "USER")
+    pub geopointsrc: String,
+    /// Altitude source (e.g., "GPS", "DTED")
+    pub altsrc: String,
 }
 
 /// MIL-STD-2525 affiliation parsed from CoT type field
@@ -111,11 +185,101 @@ impl fmt::Display for Affiliation {
     }
 }
 
+impl Detail {
+    /// Create a new empty Detail
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Check if the detail is empty
+    pub fn is_empty(&self) -> bool {
+        self.xml_detail.is_none()
+            && self.contact.is_none()
+            && self.group.is_none()
+            && self.precision_location.is_none()
+            && self.status.is_none()
+            && self.takv.is_none()
+            && self.track.is_none()
+    }
+}
+
 impl Event {
     /// Get the affiliation from the event type
     pub fn affiliation(&self) -> Option<Affiliation> {
         Affiliation::from_cot_type(&self.event_type)
     }
+
+    /// Get the callsign from the contact detail, if present
+    pub fn callsign(&self) -> Option<&str> {
+        self.detail
+            .as_ref()
+            .and_then(|d| d.contact.as_ref())
+            .map(|c| c.callsign.as_str())
+    }
+
+    /// Get the group name from the group detail, if present
+    pub fn group_name(&self) -> Option<&str> {
+        self.detail
+            .as_ref()
+            .and_then(|d| d.group.as_ref())
+            .map(|g| g.name.as_str())
+    }
+
+    /// Get the speed from the track detail, if present
+    pub fn speed(&self) -> Option<f64> {
+        self.detail
+            .as_ref()
+            .and_then(|d| d.track.as_ref())
+            .map(|t| t.speed)
+    }
+
+    /// Get the course from the track detail, if present
+    pub fn course(&self) -> Option<f64> {
+        self.detail
+            .as_ref()
+            .and_then(|d| d.track.as_ref())
+            .map(|t| t.course)
+    }
+
+    /// Convert event time to milliseconds since epoch (TAK Protocol Version 1 format)
+    pub fn time_millis(&self) -> u64 {
+        datetime_to_millis(&self.time)
+    }
+
+    /// Convert start time to milliseconds since epoch (TAK Protocol Version 1 format)
+    pub fn start_millis(&self) -> u64 {
+        datetime_to_millis(&self.start)
+    }
+
+    /// Convert stale time to milliseconds since epoch (TAK Protocol Version 1 format)
+    pub fn stale_millis(&self) -> u64 {
+        datetime_to_millis(&self.stale)
+    }
+
+    /// Create an Event with timestamps from milliseconds since epoch
+    pub fn with_millis_timestamps(
+        mut self,
+        send_time: u64,
+        start_time: u64,
+        stale_time: u64,
+    ) -> Self {
+        self.time = millis_to_datetime(send_time);
+        self.start = millis_to_datetime(start_time);
+        self.stale = millis_to_datetime(stale_time);
+        self
+    }
+}
+
+/// Convert DateTime to milliseconds since epoch
+fn datetime_to_millis(dt: &DateTime<Utc>) -> u64 {
+    (dt.timestamp() * 1000 + dt.timestamp_subsec_millis() as i64) as u64
+}
+
+/// Convert milliseconds since epoch to DateTime<Utc>
+fn millis_to_datetime(millis: u64) -> DateTime<Utc> {
+    let secs = (millis / 1000) as i64;
+    let nanos = ((millis % 1000) * 1_000_000) as u32;
+    DateTime::from_timestamp(secs, nanos).unwrap_or_else(|| DateTime::UNIX_EPOCH)
 }
 
 impl Point {

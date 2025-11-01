@@ -205,9 +205,9 @@ fn pull_tak_config(
     info!("Pulling TAK configuration from device...");
 
     // Paths to check for certificates on Android device
-    let cert_paths = vec![
-        "/sdcard/atak/cert",
-        "/storage/emulated/0/atak/cert",
+    let cert_paths: Vec<String> = vec![
+        "/sdcard/atak/cert".to_string(),
+        "/storage/emulated/0/atak/cert".to_string(),
         format!("/data/data/{}/files/cert", package),
     ];
 

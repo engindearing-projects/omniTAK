@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package omnitak.cot;
+
+// Precision location source information
+// Maps to <precisionlocation> element in CoT XML
+message PrecisionLocation {
+    // Geopoint source (e.g., "GPS", "USER")
+    string geopointsrc = 1;
+
+    // Altitude source (e.g., "GPS", "DTED")
+    string altsrc = 2;
+}

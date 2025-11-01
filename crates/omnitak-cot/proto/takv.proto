@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package omnitak.cot;
+
+// TAK version and device information
+// Maps to <takv> element in CoT XML
+message Takv {
+    // Device identifier
+    string device = 1;
+
+    // Platform (e.g., "ATAK", "WinTAK", "iTAK")
+    string platform = 2;
+
+    // Operating system
+    string os = 3;
+
+    // Version string
+    string version = 4;
+}

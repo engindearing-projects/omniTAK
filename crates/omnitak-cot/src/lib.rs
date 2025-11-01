@@ -32,9 +32,13 @@
 pub mod event;
 pub mod parser;
 pub mod proto;
+pub mod serializer;
 pub mod validate;
 
-pub use event::{Affiliation, Event, Point};
+pub use event::{
+    Affiliation, Contact, Detail, Event, Group, Point, PrecisionLocation, Status, Takv, Track,
+};
 pub use parser::{parse_cot, parse_cot_bytes, ParseError};
 pub use proto::{decode_event, encode_event, ProtoError};
+pub use serializer::serialize_event;
 pub use validate::{validate_event, validate_event_strict, validate_point, ValidationError};

@@ -2,37 +2,79 @@ syntax = "proto3";
 
 package omnitak.cot;
 
-// CoT Event message in Protocol Buffer format
-message CotEvent {
-    // CoT version (typically "2.0")
-    string version = 1;
+import "contact.proto";
+import "group.proto";
+import "track.proto";
+import "status.proto";
+import "takv.proto";
+import "precisionlocation.proto";
 
-    // Unique identifier for this event
-    string uid = 2;
+// TAK Protocol Version 1 wrapper message
+// This is the top-level message for Mesh and Stream protocols
+message TakMessage {
+    // Optional - TAK Protocol control information
+    TakControl takControl = 1;
 
-    // CoT type (e.g., "a-f-G" for atom-friendly-ground)
-    string type = 3;
-
-    // Event timestamp in RFC3339 format
-    string time = 4;
-
-    // Event start time in RFC3339 format
-    string start = 5;
-
-    // Event stale time in RFC3339 format
-    string stale = 6;
-
-    // How the event was generated
-    string how = 7;
-
-    // Geographic location
-    Point point = 8;
-
-    // Optional detail fields (simplified as key-value pairs)
-    map<string, string> detail = 9;
+    // Optional - CoT Event data
+    CotEvent cotEvent = 2;
 }
 
-// Geographic point with accuracy
+// TAK Protocol control message
+// Specifies protocol version support
+message TakControl {
+    // Lowest TAK protocol version supported
+    uint32 minProtoVersion = 1;
+
+    // Highest TAK protocol version supported
+    uint32 maxProtoVersion = 2;
+
+    // UID of the sending contact
+    string contactUid = 3;
+}
+
+// CoT Event message in Protocol Buffer format
+// Compatible with TAK Protocol Version 1
+// Point fields are inline as per TAK Protocol spec
+message CotEvent {
+    // CoT type (e.g., "a-f-G" for atom-friendly-ground)
+    string type = 1;
+
+    // Optional TAK Protocol fields
+    string access = 2;
+    string qos = 3;
+    string opex = 4;
+
+    // Unique identifier for this event
+    string uid = 5;
+
+    // Timestamps as milliseconds since epoch (1970-01-01 00:00:00 UTC)
+    uint64 sendTime = 6;   // Corresponds to 'time' field in XML
+    uint64 startTime = 7;  // Corresponds to 'start' field in XML
+    uint64 staleTime = 8;  // Corresponds to 'stale' field in XML
+
+    // How the event was generated
+    string how = 9;
+
+    // Geographic point fields (inline in TAK Protocol Version 1)
+    double lat = 10;
+    double lon = 11;
+    double hae = 12;
+    double ce = 13;
+    double le = 14;
+
+    // Structured detail section
+    Detail detail = 15;
+
+    // Legacy fields for backward compatibility
+    string version = 16;  // CoT version (typically "2.0")
+    string time = 17;     // Event timestamp in RFC3339 format
+    string start = 18;    // Event start time in RFC3339 format
+    string stale = 19;    // Event stale time in RFC3339 format
+    Point point = 20;     // For backward compatibility (optional)
+}
+
+// Geographic point with accuracy (for backward compatibility)
+// In TAK Protocol Version 1, point fields are inline in CotEvent
 message Point {
     // Latitude in decimal degrees (-90 to 90)
     double lat = 1;
@@ -48,4 +90,37 @@ message Point {
 
     // Linear error in meters (95% confidence)
     double le = 5;
+}
+
+// Detail section with structured fields
+// The strongly typed message fields are optional. If used, they MUST adhere
+// to the requirements of the message and their XML source element used to
+// populate the message MUST be omitted from xmlDetail.
+//
+// xmlDetail is optional. If omitted, all Detail data has been converted to
+// the strongly typed message fields. If present, this contains any remaining
+// detail data that has NOT been included in one of the strongly typed message
+// fields.
+message Detail {
+    // Remaining XML content not converted to structured fields
+    // Contains child elements not represented by the typed fields below
+    string xmlDetail = 1;
+
+    // <contact> element
+    Contact contact = 2;
+
+    // <__group> element
+    Group group = 3;
+
+    // <precisionlocation> element
+    PrecisionLocation precisionLocation = 4;
+
+    // <status> element
+    Status status = 5;
+
+    // <takv> element
+    Takv takv = 6;
+
+    // <track> element
+    Track track = 7;
 }

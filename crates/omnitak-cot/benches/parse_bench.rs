@@ -1,6 +1,6 @@
 use chrono::{TimeZone, Utc};
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
-use omnitak_cot::event::{Event, Point};
+use omnitak_cot::event::{Contact, Detail, Event, Point};
 use omnitak_cot::parser::parse_cot;
 use omnitak_cot::proto::{decode_event, encode_event};
 
@@ -54,14 +54,14 @@ fn create_test_event() -> Event {
             ce: 10.0,
             le: 5.0,
         },
-        detail: Some(
-            vec![
-                ("callsign".to_string(), "Alpha-1".to_string()),
-                ("remarks".to_string(), "Benchmark test event".to_string()),
-            ]
-            .into_iter()
-            .collect(),
-        ),
+        detail: Some(Detail {
+            contact: Some(Contact {
+                callsign: "Alpha-1".to_string(),
+                endpoint: None,
+            }),
+            xml_detail: Some("<remarks>Benchmark test event</remarks>".to_string()),
+            ..Default::default()
+        }),
     }
 }
 

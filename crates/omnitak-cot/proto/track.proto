@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package omnitak.cot;
+
+// Track information for a moving CoT entity
+// Maps to <track> element in CoT XML
+message Track {
+    // Speed in meters per second
+    double speed = 1;
+
+    // Course/heading in degrees (0-360)
+    double course = 2;
+}

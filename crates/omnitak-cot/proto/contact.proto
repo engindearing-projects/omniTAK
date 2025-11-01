@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package omnitak.cot;
+
+// Contact information for a CoT entity
+// Maps to <contact> element in CoT XML
+message Contact {
+    // Optional endpoint for communication
+    string endpoint = 1;
+
+    // Required callsign for display
+    string callsign = 2;
+}

@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package omnitak.cot;
+
+// Group information for a CoT entity
+// Maps to <__group> element in CoT XML
+message Group {
+    // Required group name
+    string name = 1;
+
+    // Required group role
+    string role = 2;
+}

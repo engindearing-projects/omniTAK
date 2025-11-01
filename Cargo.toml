@@ -113,6 +113,10 @@ path = "src/bin/omnitak-adb-setup.rs"
 name = "omnitak-gui"
 path = "src/bin/omnitak-gui.rs"
 
+[[bin]]
+name = "omnitak-gen"
+path = "src/bin/omnitak-gen.rs"
+
 [dependencies]
 omnitak-core = { path = "crates/omnitak-core" }
 omnitak-cot = { path = "crates/omnitak-cot" }
@@ -134,6 +138,7 @@ serde_yaml = { workspace = true }
 config = { workspace = true }
 futures = "0.3"
 chrono = { workspace = true }
+uuid = { workspace = true }
 eframe = { workspace = true }
 egui = { workspace = true }
 

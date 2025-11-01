@@ -113,6 +113,27 @@ pub struct MessageLog {
 
     /// Message type
     pub msg_type: String,
+
+    /// Unique identifier
+    pub uid: Option<String>,
+
+    /// Affiliation (parsed from type)
+    pub affiliation: Option<String>,
+
+    /// Callsign/identifier
+    pub callsign: Option<String>,
+
+    /// Latitude
+    pub lat: Option<f64>,
+
+    /// Longitude
+    pub lon: Option<f64>,
+
+    /// Altitude (HAE in meters)
+    pub altitude: Option<f64>,
+
+    /// Full XML/raw content for detailed view
+    pub raw_content: Option<String>,
 }
 
 /// UI state (not serialized).
@@ -124,11 +145,37 @@ pub struct UiState {
     /// Add/Edit server dialog state
     pub server_dialog: Option<ServerDialogState>,
 
-    /// Filter for message log
+    /// Text filter for message log
     pub message_filter: String,
+
+    /// Affiliation filter
+    pub affiliation_filter: AffiliationFilter,
+
+    /// Server filter
+    pub server_filter: String,
 
     /// Auto-scroll message log
     pub auto_scroll: bool,
+
+    /// Message details dialog
+    pub message_details_dialog: Option<MessageLog>,
+
+    /// Expanded message IDs (for collapsible cards)
+    pub expanded_messages: std::collections::HashSet<String>,
+}
+
+/// Affiliation filter options
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AffiliationFilter {
+    #[default]
+    All,
+    Pending,
+    Unknown,
+    AssumedFriend,
+    Friend,
+    Neutral,
+    Suspect,
+    Hostile,
 }
 
 /// Application tabs.

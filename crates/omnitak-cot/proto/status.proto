@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package omnitak.cot;
+
+// Status information for a CoT entity
+// Maps to <status> element in CoT XML
+message Status {
+    // Battery level (0-100)
+    uint32 battery = 1;
+}
