@@ -60,6 +60,8 @@ pub fn create_rest_router(state: ApiState) -> Router {
         .route("/api/v1/filters", post(create_filter))
         .route("/api/v1/filters/:id", get(get_filter))
         .route("/api/v1/filters/:id", delete(delete_filter))
+        // CoT message injection
+        .route("/api/v1/cot/send", post(send_cot_message))
         // Metrics
         .route("/api/v1/metrics", get(get_metrics))
         // Authentication
@@ -672,6 +674,130 @@ async fn delete_connection(
 
     Ok(Json(DeleteConnectionResponse {
         message: "Connection deleted successfully".to_string(),
+    }))
+}
+
+// ============================================================================
+// CoT Message Injection Endpoints
+// ============================================================================
+
+/// POST /api/v1/cot/send - Inject a CoT message into the system
+#[utoipa::path(
+    post,
+    path = "/api/v1/cot/send",
+    request_body = SendCotRequest,
+    responses(
+        (status = 200, description = "Message sent successfully", body = SendCotResponse),
+        (status = 400, description = "Invalid message format", body = ErrorResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 500, description = "Internal error", body = ErrorResponse)
+    ),
+    security(
+        ("bearer_auth" = []),
+        ("api_key" = [])
+    )
+)]
+async fn send_cot_message(
+    State(state): State<ApiState>,
+    RequireOperator(user): RequireOperator,
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
+    Json(request): Json<SendCotRequest>,
+) -> Result<Json<SendCotResponse>, ApiError> {
+    use omnitak_pool::DistributionMessage;
+
+    // Validate the request
+    request.validate().map_err(|e| {
+        ApiError::BadRequest(format!("Validation failed: {}", e))
+    })?;
+
+    let message_id = Uuid::new_v4();
+    let mut warnings = Vec::new();
+
+    info!(
+        message_id = %message_id,
+        user = %user.user_id.as_ref().unwrap_or(&"api_key".to_string()),
+        target_count = request.target_connections.as_ref().map(|t| t.len()).unwrap_or(0),
+        "Injecting CoT message"
+    );
+
+    // Basic validation: check if it looks like XML
+    let message_str = request.message.trim();
+    if !message_str.starts_with('<') || !message_str.ends_with('>') {
+        return Err(ApiError::BadRequest(
+            "Message must be valid XML starting with '<' and ending with '>'".to_string()
+        ));
+    }
+
+    // Try to parse as XML to validate structure (forgiving parse)
+    // Note: We accept the message even if parsing isn't perfect - prioritize showing data
+    match quick_xml::Reader::from_str(message_str).read_event() {
+        Ok(_) => {
+            // XML structure looks valid
+        }
+        Err(e) => {
+            // Log warning but accept anyway
+            let warning = format!("XML parse warning: {}. Message will be sent as-is.", e);
+            warn!(message_id = %message_id, warning = %warning);
+            warnings.push(warning);
+        }
+    }
+
+    // Create distribution message
+    let dist_message = DistributionMessage {
+        data: message_str.as_bytes().to_vec(),
+        source: None, // Injected messages have no source connection
+        timestamp: std::time::Instant::now(),
+    };
+
+    // Send to distributor
+    let sender = state.distributor.sender();
+    sender.send_async(dist_message).await.map_err(|e| {
+        error!(message_id = %message_id, error = %e, "Failed to send message to distributor");
+        ApiError::InternalError(format!("Failed to queue message: {}", e))
+    })?;
+
+    // Determine which connections received it
+    // For now, we report based on request (actual delivery is async)
+    let (sent_to_connections, sent_to_count) = if let Some(targets) = &request.target_connections {
+        (targets.clone(), targets.len())
+    } else {
+        // Broadcasting to all connections
+        let connections = state.connections.read().await;
+        let all_ids: Vec<Uuid> = connections.iter()
+            .filter(|c| c.status == ConnectionStatus::Connected)
+            .map(|c| c.id)
+            .collect();
+        let count = all_ids.len();
+        (all_ids, count)
+    };
+
+    info!(
+        message_id = %message_id,
+        sent_to_count = sent_to_count,
+        "CoT message queued for distribution"
+    );
+
+    // Audit log
+    state.audit_logger.log(
+        user.user_id.unwrap_or_else(|| "api_key".to_string()),
+        user.role,
+        "send_cot_message".to_string(),
+        "/api/v1/cot/send".to_string(),
+        serde_json::json!({
+            "message_id": message_id,
+            "sent_to_count": sent_to_count,
+            "message_length": message_str.len(),
+        }),
+        client_addr.ip().to_string(),
+        true,
+    );
+
+    Ok(Json(SendCotResponse {
+        message_id,
+        sent_to_count,
+        sent_to_connections,
+        warnings,
+        timestamp: Utc::now(),
     }))
 }
 
