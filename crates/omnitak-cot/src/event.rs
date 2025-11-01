@@ -60,6 +60,20 @@ pub struct Detail {
     pub takv: Option<Takv>,
     /// Track information
     pub track: Option<Track>,
+    /// Shape/geometry information
+    pub shape: Option<Shape>,
+    /// Link information (for routes and relationships)
+    pub link: Vec<Link>,
+    /// Color in ARGB format (e.g., -65536 for red)
+    pub color: Option<i32>,
+    /// Fill color in ARGB format
+    pub fill_color: Option<i32>,
+    /// Stroke color in ARGB format
+    pub stroke_color: Option<i32>,
+    /// Stroke weight in pixels
+    pub stroke_weight: Option<f64>,
+    /// Whether to show labels
+    pub labels_on: Option<bool>,
 }
 
 /// Contact information
@@ -116,6 +130,40 @@ pub struct PrecisionLocation {
     pub geopointsrc: String,
     /// Altitude source (e.g., "GPS", "DTED")
     pub altsrc: String,
+}
+
+/// Shape/Geometry for TAK objects
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum Shape {
+    /// Ellipse/Circle shape
+    Ellipse {
+        /// Major axis in meters
+        major: f64,
+        /// Minor axis in meters
+        minor: f64,
+        /// Rotation angle in degrees
+        angle: f64,
+    },
+    /// Polyline (can be open or closed for polygons)
+    Polyline {
+        /// Vertices of the polyline
+        vertices: Vec<Point>,
+        /// Whether the polyline is closed (polygon)
+        closed: bool,
+    },
+}
+
+/// Link between CoT events (used for routes, hierarchies, etc.)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Link {
+    /// UID of the linked event
+    pub uid: String,
+    /// Type of the linked event
+    #[serde(rename = "type")]
+    pub link_type: Option<String>,
+    /// Relationship type (e.g., "p-p" for point-to-point, "c" for contains)
+    pub relation: String,
 }
 
 /// MIL-STD-2525 affiliation parsed from CoT type field
@@ -200,6 +248,13 @@ impl Detail {
             && self.status.is_none()
             && self.takv.is_none()
             && self.track.is_none()
+            && self.shape.is_none()
+            && self.link.is_empty()
+            && self.color.is_none()
+            && self.fill_color.is_none()
+            && self.stroke_color.is_none()
+            && self.stroke_weight.is_none()
+            && self.labels_on.is_none()
     }
 }
 

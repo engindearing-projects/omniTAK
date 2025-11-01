@@ -529,3 +529,53 @@ pub struct AuditLogEntry {
     /// Whether action succeeded
     pub success: bool,
 }
+
+// ============================================================================
+// CoT Message Injection
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, Validate, ToSchema)]
+pub struct SendCotRequest {
+    /// CoT message in XML format
+    #[validate(length(min = 1, max = 100000))]
+    pub message: String,
+
+    /// Optional: Send to specific connection(s) by ID
+    /// If None, broadcasts to all connections
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_connections: Option<Vec<Uuid>>,
+
+    /// Optional: Apply filters before sending
+    /// If true, message goes through normal filter rules
+    /// If false, bypasses filters and sends directly
+    #[serde(default = "default_apply_filters")]
+    pub apply_filters: bool,
+
+    /// Optional: Priority for message routing (0-10, higher = more important)
+    #[serde(default)]
+    pub priority: u8,
+}
+
+fn default_apply_filters() -> bool {
+    true
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct SendCotResponse {
+    /// Unique message ID assigned
+    pub message_id: Uuid,
+
+    /// Number of connections the message was sent to
+    pub sent_to_count: usize,
+
+    /// List of connection IDs the message was sent to
+    pub sent_to_connections: Vec<Uuid>,
+
+    /// Any warnings during processing (e.g., missing fields)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    pub warnings: Vec<String>,
+
+    /// Timestamp when message was processed
+    pub timestamp: DateTime<Utc>,
+}
