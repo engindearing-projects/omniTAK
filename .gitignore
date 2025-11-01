@@ -40,3 +40,5 @@ dist/
 build/
 demo_server/target/
 examples/
+__pycache__/
+*.pyc

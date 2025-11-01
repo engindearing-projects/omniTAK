@@ -1,6 +1,6 @@
 //! XML serialization for CoT messages
 
-use crate::event::{Contact, Detail, Event, Group, Link, Point, PrecisionLocation, Shape, Status, Takv, Track};
+use crate::event::{Contact, Detail, Event, Group, Link, PrecisionLocation, Shape, Status, Takv, Track};
 use std::fmt::Write;
 
 /// Serialize an Event to XML string

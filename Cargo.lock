@@ -3234,6 +3234,7 @@ dependencies = [
  "omnitak-cot",
  "omnitak-filter",
  "omnitak-pool",
+ "quick-xml 0.37.5",
  "rand",
  "rust-embed",
  "rustls",

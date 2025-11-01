@@ -240,6 +240,13 @@ fn tak_message_to_event(tak_message: pb::TakMessage) -> Result<Event, ParseError
                 speed: t.speed,
                 course: t.course,
             }),
+            shape: None,  // TODO: Parse shape from protobuf
+            link: Vec::new(),  // TODO: Parse links from protobuf
+            color: None,  // TODO: Parse color from protobuf
+            fill_color: None,  // TODO: Parse fill_color from protobuf
+            stroke_color: None,  // TODO: Parse stroke_color from protobuf
+            stroke_weight: None,  // TODO: Parse stroke_weight from protobuf
+            labels_on: None,  // TODO: Parse labels_on from protobuf
         }),
     })
 }
