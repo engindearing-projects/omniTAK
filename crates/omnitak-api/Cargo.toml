@@ -29,7 +29,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Validation
-validator = { version = "0.18", features = ["derive"] }
+validator = { version = "0.19", features = ["derive"] }
 
 # Authentication
 jsonwebtoken = "9.3"
@@ -45,7 +45,7 @@ metrics = "0.23"
 metrics-exporter-prometheus = "0.15"
 
 # OpenAPI documentation
-utoipa = { version = "4.2", features = ["axum_extras", "chrono", "uuid"] }
+utoipa = { version = "5.3", features = ["axum_extras", "chrono", "uuid"] }
 
 # Security
 rustls = "0.23"
