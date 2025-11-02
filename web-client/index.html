@@ -368,9 +368,9 @@
                 const connRes = await fetch(`${API_BASE}/api/v1/connections`, {
                     headers: { 'Authorization': `Bearer ${authToken}` }
                 });
-                const connections = await connRes.json();
+                const data = await connRes.json();
 
-                displayConnections(connections);
+                displayConnections(data.connections || []);
             } catch (error) {
                 console.error('Dashboard update error:', error);
                 showError('Failed to update dashboard: ' + error.message);

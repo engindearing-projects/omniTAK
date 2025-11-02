@@ -19,6 +19,9 @@ use ui::*;
 pub mod backend;
 use backend::{BackendCommand, BackendEvent, BackendService};
 
+pub mod api_client;
+pub use api_client::{ApiClient, ConnectionInfo, CreateConnectionRequest};
+
 pub mod config_io;
 pub use config_io::{export_config, import_config, ConfigFile};
 
@@ -30,14 +33,29 @@ pub struct OmniTakApp {
     /// UI state
     pub ui_state: UiState,
 
-    /// Backend service
+    /// Backend service (standalone mode - deprecated)
     pub backend: Option<BackendService>,
+
+    /// API client (unified mode - preferred)
+    pub api_client: Option<ApiClient>,
+
+    /// API server URL
+    pub api_url: String,
+
+    /// Login credentials
+    pub login_username: String,
+    pub login_password: String,
+    pub login_error: Option<String>,
+    pub is_authenticated: bool,
 
     /// Status message for user notifications
     pub status_message: Option<(String, StatusLevel)>,
 
     /// Timestamp for status message expiry
     pub status_message_expiry: Option<std::time::Instant>,
+
+    /// Last refresh timestamp
+    pub last_refresh: std::time::Instant,
 }
 
 /// Status message level
@@ -55,8 +73,15 @@ impl Default for OmniTakApp {
             state: Arc::new(Mutex::new(AppState::default())),
             ui_state: UiState::default(),
             backend: None,
+            api_client: None,
+            api_url: "http://localhost:9443".to_string(),
+            login_username: "admin".to_string(),
+            login_password: String::new(),
+            login_error: None,
+            is_authenticated: false,
             status_message: None,
             status_message_expiry: None,
+            last_refresh: std::time::Instant::now(),
         }
     }
 }
@@ -317,14 +342,15 @@ impl OmniTakApp {
             Default::default()
         };
 
-        // Initialize backend service
-        let backend = match BackendService::new() {
-            Ok(service) => {
-                tracing::info!("Backend service initialized");
-                Some(service)
+        // Initialize API client (unified mode)
+        let api_url = "http://localhost:9443".to_string();
+        let api_client = match ApiClient::new(&api_url) {
+            Ok(client) => {
+                tracing::info!("API client initialized for {}", api_url);
+                Some(client)
             }
             Err(e) => {
-                tracing::error!("Failed to initialize backend service: {}", e);
+                tracing::error!("Failed to initialize API client: {}", e);
                 None
             }
         };
@@ -335,9 +361,16 @@ impl OmniTakApp {
                 auto_scroll: true,
                 ..Default::default()
             },
-            backend,
+            backend: None, // Deprecated - using API client now
+            api_client,
+            api_url,
+            login_username: "admin".to_string(),
+            login_password: String::new(),
+            login_error: None,
+            is_authenticated: false,
             status_message: None,
             status_message_expiry: None,
+            last_refresh: std::time::Instant::now(),
         }
     }
 
@@ -358,81 +391,117 @@ impl OmniTakApp {
         }
     }
 
-    /// Processes backend events
-    fn process_backend_events(&mut self) {
-        // Collect all events first to avoid borrowing conflicts
-        let events: Vec<BackendEvent> = if let Some(backend) = &self.backend {
-            let mut collected = Vec::new();
-            while let Some(event) = backend.try_recv_event() {
-                collected.push(event);
+    // Deprecated: process_backend_events - now using API refresh instead
+
+    /// Connects to a server (via API)
+    pub fn connect_server(&mut self, config: ServerConfig) {
+        let api_client = match &self.api_client {
+            Some(client) => client,
+            None => {
+                self.show_status(
+                    "API client not available".to_string(),
+                    StatusLevel::Error,
+                    5,
+                );
+                return;
             }
-            collected
-        } else {
-            Vec::new()
         };
 
-        // Now process events without holding a reference to backend
-        for event in events {
-            match event {
-                BackendEvent::StatusUpdate(server_name, metadata) => {
-                    self.update_connection_metadata(server_name, metadata);
-                }
-                BackendEvent::MessageReceived(log) => {
-                    self.add_message_log(log);
-                }
-                BackendEvent::Error(server_name, error) => {
-                    tracing::error!("Backend error for {}: {}", server_name, error);
+        let address = format!("{}:{}", config.host, config.port);
+        let request = crate::api_client::CreateConnectionRequest {
+            name: config.name.clone(),
+            address,
+            protocol: match config.protocol {
+                Protocol::Tcp => "tcp".to_string(),
+                Protocol::Udp => "udp".to_string(),
+                Protocol::Tls => "tls".to_string(),
+                Protocol::WebSocket => "websocket".to_string(),
+            },
+            priority: None,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        match rt.block_on(api_client.create_connection(request)) {
+            Ok(id) => {
+                tracing::info!("Created connection {} with ID: {}", config.name, id);
+                self.show_status(
+                    format!("Connected to {}", config.name),
+                    StatusLevel::Success,
+                    3,
+                );
+                self.refresh_from_api();
+            }
+            Err(e) => {
+                tracing::error!("Failed to create connection: {}", e);
+                self.show_status(
+                    format!("Failed to connect to {}: {}", config.name, e),
+                    StatusLevel::Error,
+                    5,
+                );
+            }
+        }
+    }
+
+    /// Disconnects from a server (via API)
+    pub fn disconnect_server(&mut self, server_name: String) {
+        let api_client = match &self.api_client {
+            Some(client) => client,
+            None => {
+                self.show_status(
+                    "API client not available".to_string(),
+                    StatusLevel::Error,
+                    5,
+                );
+                return;
+            }
+        };
+
+        // Find the connection ID by name
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let connections = match rt.block_on(api_client.list_connections()) {
+            Ok(conns) => conns,
+            Err(e) => {
+                tracing::error!("Failed to list connections: {}", e);
+                self.show_status(
+                    format!("Failed to disconnect: {}", e),
+                    StatusLevel::Error,
+                    5,
+                );
+                return;
+            }
+        };
+
+        let connection_id = connections
+            .iter()
+            .find(|c| c.name == server_name)
+            .map(|c| c.id.clone());
+
+        if let Some(id) = connection_id {
+            match rt.block_on(api_client.delete_connection(&id)) {
+                Ok(()) => {
+                    tracing::info!("Deleted connection: {}", server_name);
                     self.show_status(
-                        format!("Error for {}: {}", server_name, error),
+                        format!("Disconnected from {}", server_name),
+                        StatusLevel::Success,
+                        3,
+                    );
+                    self.refresh_from_api();
+                }
+                Err(e) => {
+                    tracing::error!("Failed to delete connection: {}", e);
+                    self.show_status(
+                        format!("Failed to disconnect from {}: {}", server_name, e),
                         StatusLevel::Error,
-                        10,
+                        5,
                     );
                 }
-                BackendEvent::MetricsUpdate(metrics) => {
-                    let mut state = self.state.lock().unwrap();
-                    state.metrics = metrics;
-                }
             }
-        }
-    }
-
-    /// Connects to a server
-    pub fn connect_server(&mut self, config: ServerConfig) {
-        if let Some(backend) = &self.backend {
-            if let Err(e) = backend.send_command(BackendCommand::Connect(config.clone())) {
-                tracing::error!("Failed to send connect command: {}", e);
-                self.show_status(
-                    format!("Failed to connect to {}", config.name),
-                    StatusLevel::Error,
-                    5,
-                );
-            } else {
-                self.show_status(
-                    format!("Connecting to {}...", config.name),
-                    StatusLevel::Info,
-                    3,
-                );
-            }
-        }
-    }
-
-    /// Disconnects from a server
-    pub fn disconnect_server(&mut self, server_name: String) {
-        if let Some(backend) = &self.backend {
-            if let Err(e) = backend.send_command(BackendCommand::Disconnect(server_name.clone())) {
-                tracing::error!("Failed to send disconnect command: {}", e);
-                self.show_status(
-                    format!("Failed to disconnect from {}", server_name),
-                    StatusLevel::Error,
-                    5,
-                );
-            } else {
-                self.show_status(
-                    format!("Disconnecting from {}...", server_name),
-                    StatusLevel::Info,
-                    3,
-                );
-            }
+        } else {
+            self.show_status(
+                format!("Connection {} not found", server_name),
+                StatusLevel::Error,
+                5,
+            );
         }
     }
 
@@ -557,15 +626,174 @@ impl OmniTakApp {
 
         Ok(imported_count)
     }
+
+    /// Shows the login screen
+    fn show_login_screen(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space(100.0);
+                ui.heading("🛰️ OmniTAK Login");
+                ui.add_space(40.0);
+
+                if let Some(error) = &self.login_error {
+                    ui.colored_label(egui::Color32::RED, format!("Error: {}", error));
+                    ui.add_space(10.0);
+                }
+
+                ui.horizontal(|ui| {
+                    ui.label("API URL:");
+                    ui.add_space(10.0);
+                    ui.add(egui::TextEdit::singleline(&mut self.api_url).min_size(egui::vec2(300.0, 0.0)));
+                });
+                ui.add_space(10.0);
+
+                ui.horizontal(|ui| {
+                    ui.label("Username:");
+                    ui.add_space(10.0);
+                    ui.add(egui::TextEdit::singleline(&mut self.login_username).min_size(egui::vec2(300.0, 0.0)));
+                });
+                ui.add_space(10.0);
+
+                ui.horizontal(|ui| {
+                    ui.label("Password:");
+                    ui.add_space(10.0);
+                    ui.add(egui::TextEdit::singleline(&mut self.login_password).password(true).min_size(egui::vec2(300.0, 0.0)));
+                });
+                ui.add_space(20.0);
+
+                if ui.button("Login").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    self.perform_login();
+                }
+            });
+        });
+    }
+
+    /// Performs login to the API
+    fn perform_login(&mut self) {
+        let api_client = match &mut self.api_client {
+            Some(client) => client,
+            None => {
+                self.login_error = Some("API client not initialized".to_string());
+                return;
+            }
+        };
+
+        let username = self.login_username.clone();
+        let password = self.login_password.clone();
+
+        // Use tokio runtime to make the async call
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        match rt.block_on(api_client.login(&username, &password)) {
+            Ok(()) => {
+                self.is_authenticated = true;
+                self.login_error = None;
+                self.login_password.clear(); // Clear password from memory
+                tracing::info!("Successfully logged in as {}", username);
+
+                // Initial data refresh
+                self.refresh_from_api();
+            }
+            Err(e) => {
+                self.login_error = Some(e.to_string());
+                tracing::error!("Login failed: {}", e);
+            }
+        }
+    }
+
+    /// Refreshes data from the API
+    fn refresh_from_api(&mut self) {
+        let api_client = match &self.api_client {
+            Some(client) => client,
+            None => return,
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        // Get system status
+        if let Ok(status) = rt.block_on(api_client.get_status()) {
+            let mut state = self.state.lock().unwrap();
+            state.metrics.active_connections = status.active_connections;
+            state.metrics.total_messages_received = status.messages_processed;
+            // Update other metrics as needed
+        }
+
+        // Get connections
+        if let Ok(connections) = rt.block_on(api_client.list_connections()) {
+            let mut state = self.state.lock().unwrap();
+            state.connections.clear();
+
+            for conn in connections {
+                // Parse host and port from address (format: "host:port")
+                let (host, port) = if let Some((h, p)) = conn.address.split_once(':') {
+                    (h.to_string(), p.parse::<u16>().unwrap_or(8089))
+                } else {
+                    (conn.address.clone(), 8089)
+                };
+
+                let metadata = ConnectionMetadata {
+                    connection_id: ConnectionId::new(),
+                    server_name: conn.name.clone(),
+                    status: if conn.status == "connected" {
+                        ServerStatus::Connected
+                    } else {
+                        ServerStatus::Disconnected
+                    },
+                    connected_at: None,
+                    disconnected_at: None,
+                    reconnect_attempts: 0,
+                    messages_received: conn.messages_received.unwrap_or(0),
+                    messages_sent: conn.messages_sent.unwrap_or(0),
+                    bytes_received: 0,
+                    bytes_sent: 0,
+                    last_error: None,
+                };
+                state.connections.insert(conn.name.clone(), metadata);
+
+                // Also add to servers list if not already there
+                if !state.servers.iter().any(|s| s.name == conn.name) {
+                    let protocol = match conn.protocol.as_str() {
+                        "tcp" => Protocol::Tcp,
+                        "udp" => Protocol::Udp,
+                        "tls" => Protocol::Tls,
+                        "websocket" => Protocol::WebSocket,
+                        _ => Protocol::Tcp,
+                    };
+
+                    let server_config = ServerConfig {
+                        name: conn.name.clone(),
+                        host,
+                        port,
+                        protocol,
+                        tls: None,
+                        reconnect: omnitak_core::types::ReconnectConfig::default(),
+                        connect_timeout: Duration::from_secs(10),
+                        read_timeout: Duration::from_secs(30),
+                        enabled: true,
+                        tags: vec![],
+                    };
+                    state.servers.push(server_config);
+                }
+            }
+        }
+    }
 }
 
 impl eframe::App for OmniTakApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Process backend events
-        self.process_backend_events();
-
         // Check status message expiry
         self.check_status_expiry();
+
+        // Show login screen if not authenticated
+        if !self.is_authenticated {
+            self.show_login_screen(ctx);
+            return;
+        }
+
+        // Refresh data from API every 5 seconds
+        if self.last_refresh.elapsed() > Duration::from_secs(5) {
+            self.refresh_from_api();
+            self.last_refresh = std::time::Instant::now();
+        }
 
         // Top panel with tabs
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
