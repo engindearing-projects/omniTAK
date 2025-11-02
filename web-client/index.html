@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniTAK Control Panel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .subtitle {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(59, 130, 246, 0.2);
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: #94a3b8;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #3b82f6;
+        }
+
+        .section {
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: #3b82f6;
+            font-size: 1.5rem;
+        }
+
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .btn:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-danger {
+            background: #ef4444;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #cbd5e1;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 1rem;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .connection-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .connection-card {
+            background: #0f172a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .connection-info h3 {
+            margin-bottom: 8px;
+            color: #3b82f6;
+        }
+
+        .connection-meta {
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-connected {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-disconnected {
+            background: #ef4444;
+            color: white;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ef4444;
+        }
+
+        .success {
+            background: #d1fae5;
+            color: #065f46;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #10b981;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            background: #1e293b;
+            padding: 40px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-container">
+        <h1 style="margin-bottom: 30px; font-size: 2rem;">🛰️ OmniTAK Login</h1>
+        <div id="loginError" class="error hidden"></div>
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" value="admin" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" value="admin123" required>
+            </div>
+            <button type="submit" class="btn" style="width: 100%;">Login</button>
+        </form>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="dashboard" class="container hidden">
+        <header>
+            <h1>🛰️ OmniTAK Control Panel</h1>
+            <p class="subtitle">Military-Grade TAK Server Aggregator</p>
+        </header>
+
+        <div id="errorMessage" class="error hidden"></div>
+        <div id="successMessage" class="success hidden"></div>
+
+        <!-- System Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Active Connections</div>
+                <div class="stat-value" id="activeConnections">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Messages Processed</div>
+                <div class="stat-value" id="messagesProcessed">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Messages/Second</div>
+                <div class="stat-value" id="messagesPerSecond">0.0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Uptime</div>
+                <div class="stat-value" id="uptime">0s</div>
+            </div>
+        </div>
+
+        <!-- Connections Section -->
+        <div class="section">
+            <h2>TAK Server Connections</h2>
+            <div id="connectionsList" class="connection-list">
+                <div class="loading">Loading connections...</div>
+            </div>
+            <button class="btn" style="margin-top: 20px;" onclick="showAddConnectionForm()">+ Add Connection</button>
+        </div>
+
+        <!-- Add Connection Form (hidden by default) -->
+        <div id="addConnectionSection" class="section hidden">
+            <h2>Add TAK Server Connection</h2>
+            <form id="addConnectionForm">
+                <div class="form-group">
+                    <label for="connName">Connection Name</label>
+                    <input type="text" id="connName" placeholder="e.g., Primary TAK Server" required>
+                </div>
+                <div class="form-group">
+                    <label for="connAddress">Server Address (host:port)</label>
+                    <input type="text" id="connAddress" placeholder="e.g., takserver.local:8089" required>
+                </div>
+                <div class="form-group">
+                    <label for="connProtocol">Protocol</label>
+                    <select id="connProtocol" required>
+                        <option value="tcp">TCP</option>
+                        <option value="tls">TLS (Secure)</option>
+                        <option value="udp">UDP</option>
+                        <option value="websocket">WebSocket</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn">Add Connection</button>
+                <button type="button" class="btn btn-danger" onclick="hideAddConnectionForm()" style="margin-left: 10px;">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:9443';
+        let authToken = null;
+
+        // Login handler
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Invalid credentials');
+                }
+
+                const data = await response.json();
+                authToken = data.access_token;
+
+                // Hide login, show dashboard
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+
+                // Start dashboard updates
+                updateDashboard();
+                setInterval(updateDashboard, 5000);
+            } catch (error) {
+                document.getElementById('loginError').textContent = error.message;
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        });
+
+        // Update dashboard data
+        async function updateDashboard() {
+            try {
+                // Get system status
+                const statusRes = await fetch(`${API_BASE}/api/v1/status`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const status = await statusRes.json();
+
+                document.getElementById('activeConnections').textContent = status.active_connections;
+                document.getElementById('messagesProcessed').textContent = status.messages_processed;
+                document.getElementById('messagesPerSecond').textContent = status.messages_per_second.toFixed(2);
+                document.getElementById('uptime').textContent = formatUptime(status.uptime_seconds);
+
+                // Get connections
+                const connRes = await fetch(`${API_BASE}/api/v1/connections`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const connections = await connRes.json();
+
+                displayConnections(connections);
+            } catch (error) {
+                console.error('Dashboard update error:', error);
+                showError('Failed to update dashboard: ' + error.message);
+            }
+        }
+
+        // Display connections list
+        function displayConnections(connections) {
+            const container = document.getElementById('connectionsList');
+
+            if (connections.length === 0) {
+                container.innerHTML = '<div class="loading">No connections configured. Click "Add Connection" to get started.</div>';
+                return;
+            }
+
+            container.innerHTML = connections.map(conn => `
+                <div class="connection-card">
+                    <div class="connection-info">
+                        <h3>${conn.name || conn.id}</h3>
+                        <div class="connection-meta">
+                            <span class="status-badge ${conn.status === 'connected' ? 'status-connected' : 'status-disconnected'}">
+                                ${conn.status}
+                            </span>
+                            ${conn.address} • ${conn.protocol.toUpperCase()}
+                        </div>
+                    </div>
+                    <button class="btn btn-danger" onclick="deleteConnection('${conn.id}')">Delete</button>
+                </div>
+            `).join('');
+        }
+
+        // Add connection
+        document.getElementById('addConnectionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const connection = {
+                name: document.getElementById('connName').value,
+                address: document.getElementById('connAddress').value,
+                protocol: document.getElementById('connProtocol').value
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/connections`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(connection)
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to add connection');
+                }
+
+                showSuccess('Connection added successfully!');
+                hideAddConnectionForm();
+                document.getElementById('addConnectionForm').reset();
+                updateDashboard();
+            } catch (error) {
+                showError('Failed to add connection: ' + error.message);
+            }
+        });
+
+        // Delete connection
+        async function deleteConnection(id) {
+            if (!confirm('Are you sure you want to delete this connection?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/connections/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete connection');
+                }
+
+                showSuccess('Connection deleted successfully!');
+                updateDashboard();
+            } catch (error) {
+                showError('Failed to delete connection: ' + error.message);
+            }
+        }
+
+        // UI helpers
+        function showAddConnectionForm() {
+            document.getElementById('addConnectionSection').classList.remove('hidden');
+        }
+
+        function hideAddConnectionForm() {
+            document.getElementById('addConnectionSection').classList.add('hidden');
+        }
+
+        function showError(message) {
+            const el = document.getElementById('errorMessage');
+            el.textContent = message;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 5000);
+        }
+
+        function showSuccess(message) {
+            const el = document.getElementById('successMessage');
+            el.textContent = message;
+            el.classList.remove('hidden');
+            setTimeout(() => el.classList.add('hidden'), 3000);
+        }
+
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hours}h ${minutes}m ${secs}s`;
+        }
+    </script>
+</body>
+</html>

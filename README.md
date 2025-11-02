@@ -1,505 +1,472 @@
 # OmniTAK
 
-**Military-Grade TAK Server Aggregator** | **Status: Beta (v0.2.0)**
+**Military-Grade TAK Server Aggregator**
 
-[![CI](https://github.com/engindearing-projects/omniTAK/workflows/CI/badge.svg)](https://github.com/engindearing-projects/omniTAK/actions)
-[![Release](https://github.com/engindearing-projects/omniTAK/workflows/Release/badge.svg)](https://github.com/engindearing-projects/omniTAK/releases)
-[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
-
-OmniTAK is a high-performance, memory-safe TAK (Team Awareness Kit) server aggregator written in Rust. It acts as a multi-protocol client that connects to multiple TAK servers simultaneously, aggregates CoT (Cursor on Target) messages, and intelligently routes them based on configurable filters.
-
-## Status
-
-**Beta Release (v0.2.0)** - Core functionality complete and tested with:
-- ✅ TAK Server (official) - TLS 1.2 with client certificates
-- ✅ TAKy - Basic TCP connections
-- ✅ OpenTAKServer - TCP connections (tested v1.0+)
-- 🚧 FreeTAKServer - Testing in progress
+OmniTAK is a high-performance, memory-safe TAK (Team Awareness Kit) server aggregator written in Rust. It connects to multiple TAK servers simultaneously, aggregates CoT (Cursor on Target) messages, and provides a unified API for managing tactical data.
 
 ## Features
 
-### Core Capabilities
-- **Multi-Protocol Support**: TCP, UDP, TLS, WebSocket, and UDP Multicast
+- **Multi-Protocol Support**: TCP, UDP, TLS, WebSocket
 - **High Performance**: Handle 10,000+ concurrent connections with <1ms latency
-- **Military-Grade Security**: TLS 1.3, client certificates, memory-safe implementation
-- **MIL-STD-2525 Support**: Full affiliation and symbology parsing
-- **Intelligent Filtering**: Route messages by affiliation, team, group, or geographic bounds
-- **Message Deduplication**: Automatic duplicate detection across sources
-- **Real-Time API**: REST API with WebSocket streaming
-- **Production Ready**: Comprehensive metrics, health checks, audit logging
-
-### Performance Targets
-- **Throughput**: 100,000+ messages/second
-- **Latency**: <1ms routing latency (p99)
-- **Connections**: 10,000+ concurrent TAK servers
-- **Memory**: <50MB per 1,000 connections
-- **Parsing**: <2μs per CoT message
-
-## Architecture
-
-OmniTAK is built as a Rust workspace with modular crates:
-
-```
-omnitak/
-├── omnitak-core        # Core types, config, errors
-├── omnitak-cot         # CoT parser (XML & Protobuf)
-├── omnitak-client      # Protocol clients (TCP/UDP/TLS/WS)
-├── omnitak-filter      # MIL-STD-2525 filtering & routing
-├── omnitak-pool        # Connection pool manager
-├── omnitak-cert        # Certificate management
-├── omnitak-api         # REST API & WebSocket server
-└── omnitak-gui         # Native desktop GUI (egui/eframe)
-```
-
-### Technology Stack
-- **Language**: Rust 1.90+ (2021 edition)
-- **Async Runtime**: Tokio
-- **TLS**: Rustls (memory-safe, no OpenSSL) - TLS 1.2/1.3 compatible
-- **Web Framework**: Axum
-- **GUI Framework**: egui/eframe (native, cross-platform)
-- **Serialization**: Serde, quick-xml, Protobuf (prost)
-- **Metrics**: Prometheus-compatible
-- **Logging**: Tracing with structured logs
-
-## Installation
-
-### Pre-built Binaries (Recommended)
-
-Download the latest release for your platform:
-
-**[📥 Latest Release](https://github.com/engindearing-projects/omniTAK/releases/latest)**
-
-Available platforms:
-- **Linux (x86_64)**: `omnitak-linux-x86_64.tar.gz`
-- **macOS (Intel)**: `omnitak-macos-x86_64.tar.gz`
-- **macOS (Apple Silicon)**: `omnitak-macos-aarch64.tar.gz`
-
-```bash
-# Download and extract
-tar -xzf omnitak-*.tar.gz
-cd omnitak
-
-# Run the GUI
-./omnitak-gui
-
-# Or run the server
-./omnitak --config config.yaml
-```
-
-### Build from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/engindearing-projects/omniTAK.git
-cd omniTAK
-
-# Build all binaries
-cargo build --release
-
-# Binaries in target/release/
-./target/release/omnitak-gui
-```
-
-See **[Release Process](docs/RELEASE_PROCESS.md)** for build requirements and details.
-
-## Desktop GUI
-
-**NEW**: Native desktop GUI for managing OmniTAK connections!
-
-OmniTAK now includes a native desktop GUI built with Rust (egui/eframe) for easy management of TAK server connections. The GUI provides:
-
-- **Dashboard**: System overview, metrics, and connection status
-- **Connection Management**: Add, edit, and remove TAK servers with TLS configuration
-- **Message Viewer**: Real-time CoT message log with filtering
-- **Settings**: Application configuration and import/export
-- **Status Bar**: Real-time notifications and feedback
-
-### Quick Start (GUI)
-
-**Pre-built Binaries**:
-```bash
-# Download from releases page
-./omnitak-gui
-```
-
-**Build from Source**:
-```bash
-cargo build --bin omnitak-gui --release
-cargo run --bin omnitak-gui --release
-```
-
-**Platform Support**:
-- ✅ Ubuntu/Linux (tested on Ubuntu 20.04+)
-- ✅ macOS (Intel and Apple Silicon)
-- ✅ Windows WSL2 (tested on Windows 11 with WSLg)
-
-**Documentation**:
-- **[GUI Setup Guide](docs/GUI_SETUP.md)** - Installation and platform-specific setup
-- **[GUI Features Guide](docs/GUI_FEATURES.md)** - Complete feature walkthrough
-- **[Changelog](CHANGELOG_GUI.md)** - Version history and roadmap
-
-## Easy Setup with ADB (Recommended)
-
-**NEW in v0.2.0**: Automatically pull TAK certificates and configuration from your Android device!
-
-If you already have ATAK/WinTAK configured on an Android device, you can use the **ADB Setup Tool** to automatically extract certificates and generate your OmniTAK configuration.
-
-### Quick Setup with ADB
-
-```bash
-# 1. Build OmniTAK with the ADB setup tool
-cargo build --release
-
-# 2. Connect your Android device via USB and enable USB debugging
-
-# 3. Run the ADB setup tool
-./target/release/omnitak-adb-setup --output config/config.yaml --cert-dir certs
-
-# 4. Convert certificates to PEM format
-./scripts/convert-p12-to-pem.sh certs/*.p12 certs
-
-# 5. Start OmniTAK
-cargo run --release -- --config config/config.yaml
-```
-
-**That's it!** The tool will:
-- ✅ Detect your Android device
-- ✅ Extract TAK certificates from the device
-- ✅ Pull TAK server configuration (addresses, ports)
-- ✅ Generate a ready-to-use `config.yaml` file
-
-See the **[ADB Setup Guide](docs/ADB_SETUP.md)** for detailed instructions, troubleshooting, and manual setup options.
-
----
-
-## TAK Server Certificate Setup (Manual)
-
-**IMPORTANT**: Official TAK Server uses TLS 1.2 with client certificates. You must properly format your certificates for compatibility.
-
-### Generating Client Certificates
-
-On your TAK Server, generate a client certificate:
-
-```bash
-cd /opt/tak/certs
-sudo STATE="YourState" CITY="YourCity" ORGANIZATIONAL_UNIT="TAKServer" \
-  bash -c './makeCert.sh client omnitak'
-```
-
-This creates:
-- `omnitak.p12` - PKCS12 bundle (password: atakatak by default)
-- `omnitak.pem` - Client certificate
-- `omnitak.key` - Encrypted private key
-- `ca.pem` - Certificate Authority
-
-### Converting Certificates for Rustls
-
-**Critical**: Rustls requires traditional RSA format, not encrypted PKCS8. Convert using:
-
-```bash
-# Extract certificate (already in correct format)
-openssl pkcs12 -in omnitak.p12 -out omnitak.pem -clcerts -nokeys \
-  -passin pass:atakatak -legacy
-
-# Extract and convert key to traditional RSA format
-openssl pkcs8 -in omnitak.key -out omnitak-rsa.key \
-  -passin pass:atakatak -traditional
-
-# Extract CA certificate
-openssl pkcs12 -in omnitak.p12 -out ca.pem -cacerts -nokeys \
-  -passin pass:atakatak -legacy
-```
-
-**Why `-traditional` is required**: TAK Server uses TLS 1.2 which requires traditional RSA key format. Modern PKCS8 format will cause handshake failures.
-
-### Certificate File Locations
-
-Place your certificates in a secure directory:
-
-```bash
-mkdir -p /path/to/certs
-cp omnitak.pem /path/to/certs/
-cp omnitak-rsa.key /path/to/certs/  # Use the -rsa version!
-cp ca.pem /path/to/certs/
-chmod 600 /path/to/certs/*.key
-chmod 644 /path/to/certs/*.pem
-```
-
-### Configuration Example
-
-```yaml
-servers:
-  - id: tak-server-1
-    address: "takserver.example.com:8089"
-    protocol: tls
-    tls:
-      cert_path: "/path/to/certs/omnitak.pem"
-      key_path: "/path/to/certs/omnitak-rsa.key"  # Traditional RSA format
-      ca_path: "/path/to/certs/ca.pem"
-```
-
-### Troubleshooting TLS Connections
-
-**"TLS handshake failed"** - Wrong key format. Ensure you used `-traditional` flag.
-
-**"No private key found"** - Key is still encrypted. Use `openssl pkcs8` to decrypt.
-
-**"Certificate error: peer not verified"** - Certificate doesn't match TAK Server's CA. Regenerate using TAK Server's `makeCert.sh`.
-
-**Connection timeout** - Check firewall rules and TAK Server's `CoreConfig.xml` allows your certificate's DN.
-
-### Testing Your Connection
-
-```bash
-# Test TLS connectivity
-openssl s_client -connect takserver.example.com:8089 \
-  -cert omnitak.pem -key omnitak-rsa.key -CAfile ca.pem
-
-# Should show "Verify return code: 0 (ok)"
-```
+- **Military-Grade Security**: TLS 1.3, client certificates, memory-safe Rust implementation
+- **REST API**: Complete HTTP API for all operations
+- **Web Interface**: Modern browser-based control panel
+- **Desktop GUI**: Native application for macOS, Linux, and Windows
+- **Natural Language Interface**: Create TAK objects using plain English commands
+- **Real-Time Metrics**: Prometheus-compatible metrics and monitoring
 
 ## Quick Start
 
-### Platform-Specific Setup Guides
-
-**Choose your operating system for detailed installation instructions:**
-
-- **[macOS Setup Guide](SETUP_MACOS.md)** - Complete setup for macOS (Intel & Apple Silicon)
-- **[Ubuntu/Linux Setup Guide](SETUP_UBUNTU.md)** - Complete setup for Ubuntu, Debian, and derivatives
-- **[Windows Setup Guide](SETUP_WINDOWS.md)** - Complete setup for Windows 10/11 (Native & WSL2)
-
-Each guide includes:
-- Step-by-step installation of all dependencies
-- Platform-specific troubleshooting
-- Configuration examples
-- Running as a service (where applicable)
-- Performance tuning tips
-
-### Quick Install (Summary)
-
-For experienced users who prefer a quick reference:
-
-#### Prerequisites
-- Rust 1.90+ ([Install](https://rustup.rs/))
-- Protocol Buffers compiler (protoc)
-  - macOS: `brew install protobuf`
-  - Ubuntu/Debian: `apt install protobuf-compiler`
-  - Fedora/RHEL: `dnf install protobuf-compiler`
-  - Windows: Download from [GitHub releases](https://github.com/protocolbuffers/protobuf/releases)
-
-#### Build from Source
+### Prerequisites
 
 ```bash
-# Clone the repository
+# 1. Install Rust (1.90+)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+
+# 2. Install Protocol Buffers compiler
+# macOS:
+brew install protobuf
+
+# Ubuntu/Debian:
+sudo apt install protobuf-compiler
+
+# 3. Clone the repository
 git clone https://github.com/engindearing-projects/omniTAK.git
 cd omniTAK
+```
 
-# Build core crates (working)
-cargo build --release -p omnitak-client -p omnitak-pool
+### Step 1: Start the Main Server
 
-# Create basic config
+The main server provides the REST API that all interfaces use.
+
+```bash
+# Create a basic config file
 mkdir -p config
-# (See platform guides for config.yaml template)
-
-# Run
-./target/release/omnitak --config config/config.yaml
-```
-
-### Run with Docker
-
-```bash
-docker build -t omnitak:latest .
-docker run -p 8443:8443 -v $(pwd)/config.yaml:/app/config.yaml omnitak:latest
-```
-
-## Usage
-
-### Configuration
-
-Create a `config.yaml` file:
-
-```yaml
-application:
-  max_connections: 1000
-  worker_threads: 8
-
-servers:
-  - id: tak-server-1
-    address: "192.168.1.100:8087"
-    protocol: tls
-    tls:
-      cert_path: "/path/to/client.pem"
-      key_path: "/path/to/client.key"
-      ca_path: "/path/to/ca.pem"
-
-filters:
-  mode: whitelist
-  rules:
-    - id: friendly-only
-      type: affiliation
-      allow: [friend, assumedfriend]
-      destinations: [ground-forces-server]
-
+cat > config/omnitak.yaml << 'EOF'
 api:
-  bind_addr: "0.0.0.0:8443"
-  enable_tls: true
-  tls_cert_path: "/path/to/server.pem"
-  tls_key_path: "/path/to/server.key"
+  bind_addr: "0.0.0.0:9443"
+  enable_tls: false
+  jwt_expiration: 86400
+
+servers: []
+
+logging:
+  level: "info"
+EOF
+
+# Build and run the server
+cargo run --bin omnitak --release -- \
+  --config config/omnitak.yaml \
+  --admin-password your_secure_password
 ```
 
-**Tip**: Use the [ADB Setup Tool](docs/ADB_SETUP.md) to generate this configuration automatically from your Android device!
+**Wait for this message:**
+```
+Server listening address=0.0.0.0:9443
+```
 
-### Viewing Data Flow
+The server is now running! Keep this terminal open.
 
-OmniTAK provides multiple ways to view and filter data from connected TAK servers:
+**Default credentials:**
+- Username: `admin`
+- Password: Whatever you set with `--admin-password`
 
-- **Web UI**: Real-time message feed and connection status at `http://localhost:9443`
-- **WebSocket API**: Stream CoT messages with custom filters
-- **REST API**: Query historical messages and statistics
-- **Prometheus Metrics**: Monitor performance and message flow
+---
 
-See the **[Filtering Guide](docs/FILTERING.md)** for detailed information on:
-- Setting up message filters
-- Viewing data flow in real-time
-- Filtering by affiliation, geography, team, or custom criteria
-- Performance tuning and best practices
+### Step 2: Access the Web Interface
 
-### REST API
+The web interface is a browser-based control panel for managing TAK server connections.
+
+**In a new terminal:**
 
 ```bash
-# Get system status
-curl https://localhost:8443/api/v1/status \
-  -H "Authorization: Bearer $TOKEN"
+cd omniTAK/web-client
+python3 -m http.server 8080
+```
 
-# List connections
-curl https://localhost:8443/api/v1/connections
+**Open your browser:**
+- URL: http://localhost:8080
+- Login with: `admin` / `your_secure_password`
 
-# Add new TAK server connection
-curl -X POST https://localhost:8443/api/v1/connections \
+**Features:**
+- Real-time dashboard with system metrics
+- Add/remove TAK server connections
+- View connection status
+- Monitor message throughput
+
+---
+
+### Step 3 (Optional): Run the Desktop GUI
+
+The native desktop application provides the same features as the web interface.
+
+```bash
+# Build the GUI
+cargo build --bin omnitak-gui --release
+
+# Run it
+./target/release/omnitak-gui
+```
+
+**Note:** The GUI currently runs standalone. Update coming soon to connect to the REST API.
+
+---
+
+### Step 4 (Optional): Use Natural Language Commands
+
+Create TAK objects using plain English commands.
+
+```bash
+# Install Python dependencies
+cd claude-interface
+pip3 install -r requirements.txt
+
+# Run the interactive demo
+python3 interactive_demo.py
+```
+
+**Example commands:**
+```bash
+# Create a 5km exclusion zone
+circle 34.0522,-118.2437 5 "Exclusion Zone" red
+
+# Create an area of operations
+polygon 34.0,-118.0 34.0,-117.0 33.5,-117.0 "AO Alpha" blue
+
+# Create a patrol route
+route 34.0,-118.0:Start 34.1,-118.1:Mid 34.2,-118.2:End "Patrol 1" yellow
+
+# Exit
+quit
+```
+
+---
+
+## Architecture
+
+All interfaces connect to a single REST API backend:
+
+```
+┌─────────────────────────────────┐
+│   Main Server (Port 9443)       │
+│   - REST API                    │
+│   - Connection Pool             │
+│   - Message Aggregator          │
+└────────┬────────────────────────┘
+         │ REST API
+    ┌────┼────┬────────┐
+    │    │    │        │
+Web UI  GUI  Python  Mobile
+        CLI  (future)
+```
+
+## Adding a TAK Server Connection
+
+### Via Web Interface
+
+1. Open http://localhost:8080
+2. Login with admin credentials
+3. Click "Add Connection"
+4. Fill in:
+   - **Name**: Friendly name for the connection
+   - **Address**: `hostname:port` (e.g., `takserver.local:8089`)
+   - **Protocol**: TCP, TLS, UDP, or WebSocket
+5. Click "Add Connection"
+
+### Via API
+
+```bash
+# 1. Login to get a token
+TOKEN=$(curl -s -X POST http://localhost:9443/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"your_password"}' | \
+  python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
+
+# 2. Add a connection
+curl -X POST http://localhost:9443/api/v1/connections \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "address": "192.168.1.50:8087",
+    "name": "Primary TAK Server",
+    "address": "takserver.local:8089",
     "protocol": "tcp"
   }'
 
-# Stream CoT messages via WebSocket
-wscat -c wss://localhost:8443/api/v1/stream \
-  -H "Authorization: Bearer $TOKEN"
+# 3. List all connections
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:9443/api/v1/connections
 ```
 
-### WebSocket API
+## REST API Endpoints
 
-Connect to `wss://host:port/api/v1/stream` and send:
-
-```json
-{
-  "type": "subscribe",
-  "event_types": ["a-f-G"],
-  "geo_bounds": {
-    "min_lat": 34.0,
-    "max_lat": 35.0,
-    "min_lon": -119.0,
-    "max_lon": -118.0
-  }
-}
-```
-
-## Monitoring
-
-### Prometheus Metrics
-
-OmniTAK exports Prometheus-compatible metrics on `/api/v1/metrics`:
-
-- `omnitak_connections_active` - Active connections
-- `omnitak_messages_total` - Total messages processed
-- `omnitak_routing_latency_seconds` - Message routing latency (histogram)
-- `omnitak_errors_total` - Error counter by type
-
-### Health Checks
-
-- **Liveness**: `GET /health` - Is the service running?
-- **Readiness**: `GET /ready` - Is the service ready to handle requests?
-
-## Security
+**Base URL:** `http://localhost:9443`
 
 ### Authentication
-- **JWT Tokens**: Bearer token authentication with configurable expiration
-- **API Keys**: Long-lived keys for service-to-service auth
-- **Argon2id**: Password hashing with memory-hard algorithm
+```bash
+POST /api/v1/auth/login
+  Body: {"username": "admin", "password": "your_password"}
+  Returns: {"access_token": "...", "expires_at": "...", "role": "admin"}
+```
 
-### Authorization
-- **RBAC**: Role-based access control (Admin, Operator, ReadOnly)
-- **Audit Logging**: All API operations logged with user, action, and timestamp
+### System Status
+```bash
+GET /api/v1/health        # No auth required
+GET /api/v1/status        # Requires auth
+GET /api/v1/metrics       # Prometheus metrics
+```
 
-### TLS
-- **TLS 1.2/1.3**: Supports both modern TLS 1.3 and legacy TLS 1.2 (for TAK Server compatibility)
-- **Client Certificates**: Mutual TLS for TAK server connections
-- **Memory-Safe**: Rustls implementation prevents OpenSSL vulnerabilities
+### Connection Management
+```bash
+GET    /api/v1/connections           # List all connections
+POST   /api/v1/connections           # Add new connection
+GET    /api/v1/connections/:id       # Get connection details
+DELETE /api/v1/connections/:id       # Remove connection
+```
 
-## Testing
+### CoT Messages
+```bash
+POST /api/v1/cot/send    # Send CoT message to all connected servers
+```
+
+**Full API documentation:** http://localhost:9443/api-docs.html (when server is running)
+
+## Configuration
+
+**Main config file:** `config/omnitak.yaml`
+
+```yaml
+# API Server Configuration
+api:
+  bind_addr: "0.0.0.0:9443"    # API server address
+  enable_tls: false             # Use TLS (recommended for production)
+  jwt_expiration: 86400         # Token expiration (24 hours)
+  rate_limit_rps: 100           # Rate limit requests per second
+  enable_swagger: true          # Enable API documentation
+
+# TAK Server Connections (managed via API/UI)
+servers: []
+
+# Logging
+logging:
+  level: "info"                 # trace, debug, info, warn, error
+  format: "text"                # text or json
+
+# Metrics
+metrics:
+  enabled: true
+```
+
+## TLS Configuration for TAK Servers
+
+If connecting to a TAK server that requires TLS:
+
+```bash
+# 1. Obtain certificates from your TAK server admin
+# You'll need:
+#   - client.pem (client certificate)
+#   - client.key (private key)
+#   - ca.pem (CA certificate)
+
+# 2. Convert to PEM format if needed
+openssl pkcs12 -in client.p12 -out client.pem -clcerts -nokeys
+openssl pkcs12 -in client.p12 -out client.key -nocerts -nodes
+openssl rsa -in client.key -out client-rsa.key
+
+# 3. Add via Web UI:
+#    - Select "TLS (Secure)" as protocol
+#    - Upload certificate files
+#    - Enter certificate password if required
+
+# 4. Or add via API with base64-encoded cert data
+```
+
+See `docs/ADB_SETUP.md` for automatic certificate extraction from Android devices.
+
+## Building from Source
+
+### Release Build (Optimized)
+```bash
+# Build everything
+cargo build --release
+
+# Build specific components
+cargo build --bin omnitak --release         # Main server
+cargo build --bin omnitak-gui --release     # Desktop GUI
+cargo build --bin omnitak-gen --release     # CoT generator tool
+cargo build --bin omnitak-adb-setup --release  # ADB setup tool
+```
+
+Binaries will be in `target/release/`
+
+### Development Build
+```bash
+cargo build
+```
+
+## Running Tests
 
 ```bash
 # Run all tests
 cargo test --workspace
 
-# Run benchmarks
-cargo bench --workspace
-
 # Run specific crate tests
 cargo test -p omnitak-cot
+cargo test -p omnitak-client
+cargo test -p omnitak-pool
 
 # Run with logging
 RUST_LOG=debug cargo test
 ```
 
-## Deployment
+## Platform Support
 
-### Kubernetes
+| Platform | Main Server | Web UI | Desktop GUI | Status |
+|----------|------------|--------|-------------|--------|
+| macOS (Intel) | ✅ | ✅ | ✅ | Tested |
+| macOS (Apple Silicon) | ✅ | ✅ | ✅ | Tested |
+| Ubuntu 20.04+ | ✅ | ✅ | ✅ | Tested |
+| Windows 11 (WSL2) | ✅ | ✅ | ✅ | Tested |
+| Windows (Native) | ⏳ | ✅ | ⏳ | In Progress |
 
-See `k8s/` directory for:
-- Deployment manifests
-- Service definitions
-- ConfigMap templates
-- Secret management
-- Horizontal Pod Autoscaling
+## Troubleshooting
 
-### Docker Compose
+### Server won't start
 
+**Port already in use:**
 ```bash
-docker-compose up -d
+# Check what's using port 9443
+lsof -i :9443
+
+# Kill the process or change port in config.yaml
+```
+
+**Permission denied:**
+```bash
+# Don't use privileged ports (< 1024) without sudo
+# Use ports like 8443, 9443 instead
+```
+
+### Web UI can't connect
+
+**Check server is running:**
+```bash
+curl http://localhost:9443/api/v1/health
+```
+
+Should return: `{"status":"healthy","timestamp":"..."}`
+
+**CORS issues:**
+- Web UI must be served from same host as API, or
+- Configure CORS in `config.yaml`
+
+### Authentication errors
+
+**Invalid credentials:**
+- Check username is `admin`
+- Verify password matches what you set with `--admin-password`
+
+**Token expired:**
+- Tokens expire after 24 hours by default
+- Login again to get a new token
+
+### Connection to TAK server fails
+
+**TCP connections:**
+- Verify TAK server address and port
+- Check firewall allows outbound connections
+- Test with: `telnet takserver.local 8089`
+
+**TLS connections:**
+- Ensure certificates are in correct format (PEM)
+- Verify certificate matches server hostname
+- Check certificate is not expired
+- Enable debug logging: `RUST_LOG=debug cargo run ...`
+
+## Performance Tuning
+
+For high-throughput scenarios:
+
+```yaml
+# config.yaml
+application:
+  max_connections: 10000        # Maximum TAK server connections
+  worker_threads: 8             # CPU cores * 2 recommended
+
+performance:
+  buffer_size: 16384            # Increase for high message rates
+  max_message_size: 2097152     # 2MB max message size
+  connection_timeout: 30
+  keepalive_interval: 60
+```
+
+## Security Best Practices
+
+### Production Deployment
+
+1. **Enable TLS for API:**
+```yaml
+api:
+  enable_tls: true
+  tls_cert_path: "/path/to/api-cert.pem"
+  tls_key_path: "/path/to/api-key.pem"
+```
+
+2. **Use strong passwords:**
+```bash
+# Generate a random password
+openssl rand -base64 32
+
+# Set via environment variable
+export OMNITAK_ADMIN_PASSWORD='your_strong_password'
+cargo run --bin omnitak --release
+```
+
+3. **Enable audit logging:**
+```yaml
+security:
+  audit_logging: true
+```
+
+4. **Restrict CORS origins:**
+```yaml
+security:
+  cors_origins:
+    - "https://your-dashboard.example.com"
+```
+
+5. **Use API keys for automation:**
+```bash
+# Create an API key via the API
+curl -X POST http://localhost:9443/api/v1/auth/api-keys \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "automation-key", "role": "operator"}'
 ```
 
 ## Documentation
 
-### Setup Guides
-- **[ADB Setup Guide](docs/ADB_SETUP.md)** - Automatically pull certificates from Android devices
-- **[Filtering Guide](docs/FILTERING.md)** - Configure message filtering and view data flow
-- [macOS Setup](SETUP_MACOS.md) - Complete macOS installation
-- [Ubuntu Setup](SETUP_UBUNTU.md) - Complete Linux installation
-- [Windows Setup](SETUP_WINDOWS.md) - Complete Windows installation
-
-### Technical Documentation
-- [API Documentation](./crates/omnitak-api/README.md)
-- [CoT Parser](./crates/omnitak-cot/README.md)
-- [Filter System](./crates/omnitak-filter/README.md)
-- [Connection Pool](./crates/omnitak-pool/README.md)
+- **API Docs:** http://localhost:9443/api-docs.html (when server running)
+- **Setup Guides:**
+  - [macOS Setup](SETUP_MACOS.md)
+  - [Ubuntu Setup](SETUP_UBUNTU.md)
+  - [Windows Setup](SETUP_WINDOWS.md)
+- **Feature Guides:**
+  - [ADB Certificate Setup](docs/ADB_SETUP.md)
+  - [GUI Features](docs/GUI_FEATURES.md)
+  - [Filtering Guide](docs/FILTERING.md)
 
 ## Contributing
 
-Contributions are welcome! Please:
+Contributions welcome! Please:
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Code Standards
-- Follow Rust style guidelines (`cargo fmt`)
-- Pass all tests (`cargo test`)
-- Pass clippy lints (`cargo clippy -- -D warnings`)
-- Add tests for new features
-- Update documentation
+2. Create a feature branch
+3. Follow Rust style guidelines (`cargo fmt`)
+4. Pass all tests (`cargo test`)
+5. Pass clippy lints (`cargo clippy`)
+6. Update documentation
+7. Submit a Pull Request
 
 ## License
 
@@ -509,30 +476,11 @@ Licensed under either of:
 
 at your option.
 
-## Military Applications
-
-OmniTAK is designed for tactical battlefield coordination:
-- **Multi-Domain Operations**: Aggregate feeds from ground, air, and maritime units
-- **Coalition Operations**: Bridge different TAK server implementations
-- **Tactical Edge**: Run on resource-constrained devices (Raspberry Pi, etc.)
-- **Denied/Degraded Networks**: Message deduplication and efficient routing
-- **Operational Security**: Memory-safe, audit logging, RBAC
-
-## Related Projects
-
-- [TAK Server](https://tak.gov/) - Official Team Awareness Kit server
-- [FreeTAKServer](https://github.com/FreeTAKTeam/FreeTakServer) - Python TAK server
-- [TAKy](https://github.com/tkuester/taky) - Minimal TAK server
-- [OpenTAKServer](https://github.com/brian7704/OpenTAKServer) - Flask-based TAK server
-
-## Known Issues
-
-
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/engindearing-projects/omniTAK/issues)
-- **Documentation**: [Wiki](https://github.com/engindearing-projects/omniTAK/wiki)
+- **Issues:** [GitHub Issues](https://github.com/engindearing-projects/omniTAK/issues)
+- **Documentation:** See docs/ directory
 
 ---
 
-**Built with Rust for reliability and performance in tactical environments.**
+**Built with Rust for reliability and performance in tactical environments.** 🚀
