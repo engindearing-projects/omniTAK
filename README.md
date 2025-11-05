@@ -1,4 +1,4 @@
-# OmniTAK
+# Omni-TAK
 
 **Military-Grade TAK Server Aggregator**
 
