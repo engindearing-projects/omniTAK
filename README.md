@@ -198,6 +198,36 @@ curl -H "Authorization: Bearer $TOKEN" \
   http://localhost:9443/api/v1/connections
 ```
 
+### Via ADB (Android Device)
+
+**NEW!** Automatically pull TAK certificates from your ATAK device via USB:
+
+```bash
+# 1. Install Android SDK Platform-Tools
+sudo apt-get install android-tools-adb  # Linux
+brew install android-platform-tools     # macOS
+
+# 2. Enable USB debugging on your Android device
+#    Settings → Developer Options → USB Debugging
+
+# 3. Connect device via USB and accept authorization prompt
+
+# 4. Run the automated script
+./examples/adb_pull_certs.sh
+
+# Or use the CLI tool directly
+cargo run --bin omnitak-adb-setup -- --output config/config.yaml
+```
+
+The ADB integration will:
+- ✅ Detect connected ATAK devices
+- ✅ Pull certificates from `/sdcard/atak/cert/`
+- ✅ Extract TAK server configuration
+- ✅ Automatically create a connection
+- ✅ Convert PKCS#12 to PEM if needed
+
+**See [ADB_INTEGRATION.md](ADB_INTEGRATION.md) for complete documentation.**
+
 ## REST API Endpoints
 
 **Base URL:** `http://localhost:9443`

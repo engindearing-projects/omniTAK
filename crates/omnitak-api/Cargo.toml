@@ -10,6 +10,8 @@ omnitak-pool = { path = "../omnitak-pool" }
 omnitak-client = { path = "../omnitak-client" }
 omnitak-filter = { path = "../omnitak-filter" }
 omnitak-cot = { path = "../omnitak-cot" }
+omnitak-cert = { path = "../omnitak-cert" }
+omnitak-adb = { path = "../omnitak-adb" }
 
 # Axum web framework
 axum = { version = "0.7", features = ["ws", "macros"] }

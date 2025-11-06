@@ -70,6 +70,9 @@ pub fn create_rest_router(state: ApiState) -> Router {
         .route("/api/v1/auth/api-keys", post(create_api_key))
         // Audit logs (admin only)
         .route("/api/v1/audit", get(get_audit_logs))
+        // ADB integration (requires operator role)
+        .route("/api/v1/adb/devices", get(crate::adb::list_devices))
+        .route("/api/v1/adb/pull-certs", post(crate::adb::pull_certificates))
         .with_state(state)
 }
 

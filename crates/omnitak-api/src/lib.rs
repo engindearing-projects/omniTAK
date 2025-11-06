@@ -32,6 +32,7 @@
 //! }
 //! ```
 
+pub mod adb;
 pub mod auth;
 pub mod middleware;
 pub mod rest;
