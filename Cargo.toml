@@ -8,6 +8,7 @@ members = [
     "crates/omnitak-cert",
     "crates/omnitak-api",
     "crates/omnitak-gui",
+    "crates/omnitak-adb",
 ]
 resolver = "2"
 
@@ -126,6 +127,7 @@ omnitak-pool = { path = "crates/omnitak-pool" }
 omnitak-cert = { path = "crates/omnitak-cert" }
 omnitak-api = { path = "crates/omnitak-api" }
 omnitak-gui = { path = "crates/omnitak-gui" }
+omnitak-adb = { path = "crates/omnitak-adb" }
 
 tokio = { workspace = true }
 tokio-stream = "0.1"
