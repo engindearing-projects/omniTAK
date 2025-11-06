@@ -14,6 +14,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tracing::Level;
 
+// Re-export discovery config types for convenience
+pub use omnitak_discovery::DiscoveryConfig;
+
 /// Main application configuration.
 ///
 /// This is the root configuration structure that contains all settings
@@ -60,6 +63,10 @@ pub struct AppConfig {
     /// Storage configuration
     #[serde(default)]
     pub storage: StorageConfig,
+
+    /// Service discovery configuration
+    #[serde(default)]
+    pub discovery: DiscoveryConfig,
 }
 
 impl AppConfig {
