@@ -40,6 +40,7 @@ pub struct ApiState {
     pub distributor: Arc<MessageDistributor>,
     pub connections: Arc<RwLock<Vec<ConnectionInfo>>>,
     pub start_time: std::time::Instant,
+    pub discovery: Option<Arc<omnitak_discovery::DiscoveryService>>,
 }
 
 // ============================================================================
@@ -47,7 +48,7 @@ pub struct ApiState {
 // ============================================================================
 
 pub fn create_rest_router(state: ApiState) -> Router {
-    Router::new()
+    let mut router = Router::new()
         // System endpoints
         .route("/api/v1/status", get(get_system_status))
         .route("/api/v1/health", get(health_check))
@@ -72,8 +73,25 @@ pub fn create_rest_router(state: ApiState) -> Router {
         .route("/api/v1/audit", get(get_audit_logs))
         // ADB integration (requires operator role)
         .route("/api/v1/adb/devices", get(crate::adb::list_devices))
-        .route("/api/v1/adb/pull-certs", post(crate::adb::pull_certificates))
-        .with_state(state)
+        .route("/api/v1/adb/pull-certs", post(crate::adb::pull_certificates));
+
+    // Add discovery routes if discovery service is enabled
+    if let Some(discovery) = &state.discovery {
+        let discovery_state = crate::discovery::DiscoveryState {
+            discovery: discovery.clone(),
+        };
+
+        router = router
+            .route("/api/v1/discovery/status", get(crate::discovery::get_discovery_status))
+            .route("/api/v1/discovery/services", get(crate::discovery::list_discovered_services))
+            .route("/api/v1/discovery/services/:id", get(crate::discovery::get_discovered_service))
+            .route("/api/v1/discovery/refresh", post(crate::discovery::refresh_discovery))
+            .route("/api/v1/discovery/tak-servers", get(crate::discovery::list_tak_servers))
+            .route("/api/v1/discovery/atak-devices", get(crate::discovery::list_atak_devices))
+            .with_state(discovery_state);
+    }
+
+    router.with_state(state)
 }
 
 // ============================================================================

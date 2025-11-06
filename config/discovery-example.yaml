@@ -1,0 +1,90 @@
+# Example configuration for OmniTAK with mDNS discovery enabled
+
+app:
+  name: omnitak
+  environment: production
+  worker_threads: 0  # 0 = number of CPUs
+  max_connections: 1000
+  shutdown_timeout_secs: 30
+
+# mDNS Service Discovery Configuration
+discovery:
+  # Enable automatic service discovery
+  enabled: true
+
+  # Announce this aggregator via mDNS for others to discover
+  announce_enabled: true
+
+  # Port to advertise for this aggregator's REST API
+  announce_port: 8080
+
+  # Optional custom instance name (auto-generated from hostname if not set)
+  # instance_name: "OmniTAK-Alpha"
+
+  # Service types to discover on the network
+  service_types:
+    - tak_server      # TAK servers (_tak._tcp.local)
+    - atak_device     # ATAK devices (_atak._tcp.local)
+    - tak_aggregator  # Other aggregators (_tak-aggregator._tcp.local)
+
+  # Automatically add discovered TAK servers to connection pool
+  # Recommended: false for production (manual approval safer)
+  auto_connect: false
+
+  # Only auto-connect to servers advertising TLS support
+  require_tls: true
+
+  # How often to check for stale services (seconds)
+  cleanup_interval_secs: 30
+
+  # How long before a service is considered stale (seconds)
+  stale_timeout_secs: 300  # 5 minutes
+
+# Manual TAK server connections (in addition to discovered services)
+servers:
+  - name: primary-tak-server
+    host: takserver.example.com
+    port: 8089
+    protocol: tls
+    enabled: true
+    tls:
+      cert_path: /path/to/client.pem
+      key_path: /path/to/client-key.pem
+      ca_cert_path: /path/to/ca.pem
+
+# Filter configuration
+filters:
+  enabled: true
+  mode: blacklist
+  default_action: accept
+  rules: []
+
+# Logging configuration
+logging:
+  level: info
+  format: text
+  stdout: true
+  timestamps: true
+  file_line: false
+
+# API server configuration
+api:
+  enabled: true
+  host: 0.0.0.0
+  port: 8080
+  cors: true
+  max_body_size: 1048576  # 1MB
+  request_timeout_secs: 30
+
+# Metrics configuration
+metrics:
+  enabled: true
+  path: /metrics
+  interval_secs: 60
+
+# Storage configuration
+storage:
+  backend: memory
+  data_dir: ./data
+  retention_secs: 0  # 0 = unlimited
+  max_size_bytes: 0  # 0 = unlimited

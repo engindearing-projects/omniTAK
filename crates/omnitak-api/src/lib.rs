@@ -34,6 +34,7 @@
 
 pub mod adb;
 pub mod auth;
+pub mod discovery;
 pub mod middleware;
 pub mod rest;
 pub mod static_files;
