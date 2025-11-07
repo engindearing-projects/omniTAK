@@ -2,6 +2,20 @@
 
 Complete guide to using the OmniTAK desktop GUI application.
 
+## Screenshots
+
+![Dashboard](images/gui-dashboard.png)
+*System Dashboard - View metrics, connection status, and system overview*
+
+![Connections](images/gui-connections.png)
+*Connection Management - Add, edit, and manage TAK server connections*
+
+![Messages](images/gui-messages.png)
+*Message Viewer - Real-time CoT message stream with filtering*
+
+![Settings](images/gui-settings.png)
+*Settings & Configuration - Application preferences and info*
+
 ## Table of Contents
 1. [Getting Started](#getting-started)
 2. [Dashboard](#dashboard)
