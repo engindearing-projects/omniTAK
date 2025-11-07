@@ -1,25 +1,9 @@
-# OmniTAK Configuration
-application:
-  max_connections: 100
-  worker_threads: 4
-
-# TAK Server Connections (add via API/GUI/Web UI)
-servers: []
-
-# REST API Configuration
 api:
   bind_addr: "0.0.0.0:9443"
   enable_tls: false
   jwt_expiration: 86400
-  rate_limit_rps: 100
-  enable_swagger: true
-  enable_static_files: true
 
-# Logging
+servers: []
+
 logging:
   level: "info"
-  format: "text"
-
-# Metrics
-metrics:
-  enabled: true

@@ -200,6 +200,7 @@ impl DiscoveryService {
         let event_tx = self.event_tx.clone();
         let running = self.running.clone();
         let svc_type = service_type.clone();
+        let service_string_clone = service_string.clone();
 
         let task = tokio::spawn(async move {
             while running.load(Ordering::SeqCst) {
@@ -213,7 +214,7 @@ impl DiscoveryService {
                     }
                 }
             }
-            debug!("Browser task for {} stopped", service_string);
+            debug!("Browser task for {} stopped", service_string_clone);
         });
 
         let task_name = format!("browser_{}", service_string);
@@ -287,8 +288,8 @@ impl DiscoveryService {
         let addresses: Vec<IpAddr> = info.get_addresses().iter().copied().collect();
 
         let mut properties = HashMap::new();
-        for (key, value) in info.get_properties().iter() {
-            properties.insert(key.clone(), value.val_str().to_string());
+        for property in info.get_properties().iter() {
+            properties.insert(property.key().to_string(), property.val_str().to_string());
         }
 
         DiscoveredService::new(

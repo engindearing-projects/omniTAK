@@ -1,7 +1,8 @@
 //! Discovery REST API endpoints for managing mDNS service discovery
 
 use crate::auth::{AuthUser, RequireOperator};
-use crate::types::{ApiError, ErrorResponse};
+use crate::rest::{ApiState, ApiError};
+use crate::types::ErrorResponse;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -15,12 +16,6 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use validator::Validate;
 
-/// Application state for discovery endpoints
-#[derive(Clone)]
-pub struct DiscoveryState {
-    pub discovery: Arc<DiscoveryService>,
-}
-
 // ============================================================================
 // Response Types
 // ============================================================================
@@ -28,6 +23,7 @@ pub struct DiscoveryState {
 /// Response containing list of discovered services
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(utoipa::ToSchema)]
 pub struct DiscoveredServicesList {
     /// Total number of services
     pub total: usize,
@@ -42,6 +38,7 @@ pub struct DiscoveredServicesList {
 /// Discovered service information for API responses
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(utoipa::ToSchema)]
 pub struct DiscoveredServiceResponse {
     /// Unique service ID
     pub id: String,
@@ -110,6 +107,7 @@ impl From<DiscoveredService> for DiscoveredServiceResponse {
 /// Discovery status response
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(utoipa::ToSchema)]
 pub struct DiscoveryStatusResponse {
     /// Whether discovery is running
     pub running: bool,
@@ -129,6 +127,7 @@ pub struct DiscoveryStatusResponse {
 
 /// Request to manually trigger discovery refresh
 #[derive(Debug, Serialize, Deserialize, Validate)]
+#[derive(utoipa::ToSchema)]
 pub struct RefreshRequest {
     /// Optional service type to refresh (or all if not specified)
     pub service_type: Option<String>,
@@ -169,10 +168,13 @@ pub struct DiscoveryQuery {
     )
 )]
 pub async fn get_discovery_status(
-    State(state): State<DiscoveryState>,
+    State(state): State<ApiState>,
     _user: AuthUser,
 ) -> Result<Json<DiscoveryStatusResponse>, ApiError> {
-    let services = state.discovery.get_discovered_services().await;
+    let discovery = state.discovery.as_ref()
+        .ok_or_else(|| ApiError::NotFound("Discovery service not enabled".to_string()))?;
+
+    let services = discovery.get_discovered_services().await;
 
     let active_count = services
         .iter()
@@ -185,7 +187,7 @@ pub async fn get_discovery_status(
         .count();
 
     let status = DiscoveryStatusResponse {
-        running: state.discovery.is_running(),
+        running: discovery.is_running(),
         total_services: services.len(),
         active_services: active_count,
         stale_services: stale_count,
@@ -214,11 +216,14 @@ pub async fn get_discovery_status(
     )
 )]
 pub async fn list_discovered_services(
-    State(state): State<DiscoveryState>,
+    State(state): State<ApiState>,
     Query(query): Query<DiscoveryQuery>,
     _user: AuthUser,
 ) -> Result<Json<DiscoveredServicesList>, ApiError> {
-    let mut services = state.discovery.get_discovered_services().await;
+    let discovery = state.discovery.as_ref()
+        .ok_or_else(|| ApiError::NotFound("Discovery service not enabled".to_string()))?;
+
+    let mut services = discovery.get_discovered_services().await;
 
     // Apply filters
     if let Some(ref service_type_str) = query.service_type {
@@ -264,12 +269,14 @@ pub async fn list_discovered_services(
     )
 )]
 pub async fn get_discovered_service(
-    State(state): State<DiscoveryState>,
+    State(state): State<ApiState>,
     Path(id): Path<String>,
     _user: AuthUser,
 ) -> Result<Json<DiscoveredServiceResponse>, ApiError> {
-    let service = state
-        .discovery
+    let discovery = state.discovery.as_ref()
+        .ok_or_else(|| ApiError::NotFound("Discovery service not enabled".to_string()))?;
+
+    let service = discovery
         .get_service(&id)
         .await
         .ok_or_else(|| ApiError::NotFound(format!("Service not found: {}", id)))?;
@@ -293,17 +300,19 @@ pub async fn get_discovered_service(
     )
 )]
 pub async fn refresh_discovery(
-    State(state): State<DiscoveryState>,
+    State(state): State<ApiState>,
     _operator: RequireOperator,
     Json(_request): Json<RefreshRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    let discovery = state.discovery.as_ref()
+        .ok_or_else(|| ApiError::NotFound("Discovery service not enabled".to_string()))?;
+
     info!("Manually triggering discovery refresh");
 
-    state
-        .discovery
+    discovery
         .refresh()
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to refresh discovery: {}", e)))?;
+        .map_err(|e| ApiError::InternalError(format!("Failed to refresh discovery: {}", e)))?;
 
     Ok((
         StatusCode::OK,
@@ -328,11 +337,13 @@ pub async fn refresh_discovery(
     )
 )]
 pub async fn list_tak_servers(
-    State(state): State<DiscoveryState>,
+    State(state): State<ApiState>,
     _user: AuthUser,
 ) -> Result<Json<DiscoveredServicesList>, ApiError> {
-    let services = state
-        .discovery
+    let discovery = state.discovery.as_ref()
+        .ok_or_else(|| ApiError::NotFound("Discovery service not enabled".to_string()))?;
+
+    let services = discovery
         .get_services_by_type(&ServiceType::TakServer)
         .await;
 
@@ -362,11 +373,13 @@ pub async fn list_tak_servers(
     )
 )]
 pub async fn list_atak_devices(
-    State(state): State<DiscoveryState>,
+    State(state): State<ApiState>,
     _user: AuthUser,
 ) -> Result<Json<DiscoveredServicesList>, ApiError> {
-    let services = state
-        .discovery
+    let discovery = state.discovery.as_ref()
+        .ok_or_else(|| ApiError::NotFound("Discovery service not enabled".to_string()))?;
+
+    let services = discovery
         .get_services_by_type(&ServiceType::AtakDevice)
         .await;
 

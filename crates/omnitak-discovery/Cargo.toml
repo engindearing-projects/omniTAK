@@ -39,5 +39,11 @@ uuid = { workspace = true }
 # Async channels
 async-channel = { workspace = true }
 
+# System information
+hostname = "0.4"
+
+# OpenAPI documentation
+utoipa = "5.4"
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

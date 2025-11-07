@@ -138,6 +138,7 @@ impl DiscoveredService {
 /// Status of a discovered service
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(utoipa::ToSchema)]
 pub enum ServiceStatus {
     /// Service is active and responding
     Active,

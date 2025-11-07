@@ -6,9 +6,6 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-# Internal dependencies
-omnitak-discovery = { path = "../omnitak-discovery" }
-
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }

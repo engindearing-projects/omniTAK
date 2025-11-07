@@ -316,6 +316,7 @@ impl Server {
             distributor: distributor.clone(),
             connections: Arc::new(RwLock::new(Vec::new())),
             start_time: std::time::Instant::now(),
+            discovery: None, // TODO: Initialize discovery service if enabled in config
         };
 
         let ws_state = websocket::WsState::new(self.auth_service.clone());

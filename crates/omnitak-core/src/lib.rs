@@ -38,6 +38,7 @@
 //! ```
 
 pub mod config;
+pub mod discovery_config;
 pub mod error;
 pub mod types;
 

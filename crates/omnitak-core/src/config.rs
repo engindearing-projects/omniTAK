@@ -15,7 +15,7 @@ use std::time::Duration;
 use tracing::Level;
 
 // Re-export discovery config types for convenience
-pub use omnitak_discovery::DiscoveryConfig;
+pub use crate::discovery_config::DiscoveryConfig;
 
 /// Main application configuration.
 ///

@@ -9,8 +9,8 @@ use axum::{
     Json,
 };
 use omnitak_adb::{AdbClient, AtakPackage, TakCertificateBundle};
-use omnitak_cert::{CertificateSource, parse_certificate_bundle, parse_pkcs12};
-use omnitak_client::tls::{TlsClient, TlsClientConfig};
+use omnitak_client::tls::{TlsClient, TlsClientConfig, TlsCertConfig, TlsCertSource, FramingMode};
+use omnitak_client::ClientConfig;
 use omnitak_core::ConnectionId;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -20,7 +20,8 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 use validator::Validate;
 
-use super::rest::{ApiState, ConnectionInfo};
+use super::rest::{ApiState, ApiError};
+use super::types::ConnectionInfo;
 
 // ============================================================================
 // Types
@@ -112,14 +113,10 @@ pub async fn list_devices(
 
     // Check if ADB is available
     if !adb.is_available() {
-        return Err(ApiError::BadRequest {
-            message: "ADB is not available. Make sure Android SDK Platform-Tools is installed.".to_string(),
-        });
+        return Err(ApiError::BadRequest("ADB is not available. Make sure Android SDK Platform-Tools is installed.".to_string()));
     }
 
-    let devices = adb.list_devices().map_err(|e| ApiError::Internal {
-        message: format!("Failed to list devices: {}", e),
-    })?;
+    let devices = adb.list_devices().map_err(|e| ApiError::InternalError(format!("Failed to list devices: {}", e)))?;
 
     let devices = devices
         .into_iter()
@@ -140,31 +137,26 @@ pub async fn pull_certificates(
     _user: AuthUser,
     Json(req): Json<PullCertsRequest>,
 ) -> Result<Json<PullCertsResponse>, ApiError> {
-    req.validate().map_err(|e| ApiError::BadRequest {
-        message: format!("Invalid request: {}", e),
-    })?;
+    req.validate().map_err(|e| ApiError::BadRequest(format!("Invalid request: {}", e)))?;
 
     let adb = AdbClient::new();
 
     // Check if ADB is available
     if !adb.is_available() {
-        return Err(ApiError::BadRequest {
-            message: "ADB is not available. Make sure Android SDK Platform-Tools is installed.".to_string(),
-        });
+        return Err(ApiError::BadRequest("ADB is not available. Make sure Android SDK Platform-Tools is installed.".to_string()));
     }
 
     // Get device
     let device = if let Some(serial) = req.device_serial {
-        adb.get_device(&serial).map_err(|e| ApiError::NotFound {
-            message: format!("Device not found: {}", e),
-        })?
+        adb.get_device(&serial).map_err(|e| ApiError::NotFound(format!("Device not found: {}", e)))?
     } else {
-        adb.auto_detect_device().map_err(|e| ApiError::BadRequest {
-            message: format!("Failed to detect device: {}", e),
-        })?
+        adb.auto_detect_device().map_err(|e| ApiError::BadRequest(format!("Failed to detect device: {}", e)))?
     };
 
     info!("Pulling certificates from device: {}", device.serial);
+
+    // Save device serial for later use
+    let device_serial = device.serial.clone();
 
     // Determine ATAK package
     let package = match req.package.as_str() {
@@ -177,16 +169,12 @@ pub async fn pull_certificates(
     let cert_dir = PathBuf::from(&req.cert_dir);
     tokio::fs::create_dir_all(&cert_dir)
         .await
-        .map_err(|e| ApiError::Internal {
-            message: format!("Failed to create certificate directory: {}", e),
-        })?;
+        .map_err(|e| ApiError::InternalError(format!("Failed to create certificate directory: {}", e)))?;
 
     // Pull certificates
     let bundle = device
         .pull_tak_certificates(&cert_dir, package)
-        .map_err(|e| ApiError::Internal {
-            message: format!("Failed to pull certificates: {}", e),
-        })?;
+        .map_err(|e| ApiError::InternalError(format!("Failed to pull certificates: {}", e)))?;
 
     info!(
         "Successfully pulled {} certificate files",
@@ -207,7 +195,7 @@ pub async fn pull_certificates(
 
     // Auto-connect if requested
     let connection_id = if req.auto_connect {
-        match create_connection_from_bundle(state, bundle).await {
+        match create_connection_from_bundle(state, bundle, device_serial).await {
             Ok(id) => {
                 info!("Successfully created connection: {}", id);
                 Some(id)
@@ -240,6 +228,7 @@ pub async fn pull_certificates(
 async fn create_connection_from_bundle(
     state: ApiState,
     bundle: TakCertificateBundle,
+    device_serial: String,
 ) -> anyhow::Result<String> {
     info!("Creating TAK connection from certificate bundle...");
 
@@ -280,17 +269,17 @@ async fn create_connection_from_bundle(
         ));
     } else if let (Some(cert), Some(key), Some(ca)) = (client_cert, client_key, ca_cert) {
         info!("Using PEM certificates");
-        CertificateSource::Files {
-            cert_path: cert.local_path.to_string_lossy().to_string(),
-            key_path: key.local_path.to_string_lossy().to_string(),
-            ca_path: Some(ca.local_path.to_string_lossy().to_string()),
+        TlsCertSource::Files {
+            cert_path: cert.local_path.clone(),
+            key_path: key.local_path.clone(),
+            ca_cert_path: Some(ca.local_path.clone()),
         }
     } else {
         return Err(anyhow::anyhow!("No valid certificate files found"));
     };
 
     // Create connection ID
-    let connection_id = ConnectionId::new(Uuid::new_v4().to_string());
+    let connection_id = ConnectionId::new();
 
     // Determine server address
     let server_address = bundle
@@ -304,42 +293,63 @@ async fn create_connection_from_bundle(
 
     info!("Connecting to TAK server: {}", server_address);
 
+    // Parse host and port from server address
+    let (host, port) = server_address
+        .rsplit_once(':')
+        .ok_or_else(|| anyhow::anyhow!("Invalid server address format"))?;
+
     // Create TLS client configuration
     let tls_config = TlsClientConfig {
-        address: server_address.clone(),
-        certificate_source: cert_source,
-        validate_certs: true,
-        reconnect: omnitak_client::ReconnectConfig {
-            enabled: true,
-            initial_delay: std::time::Duration::from_secs(1),
-            max_delay: std::time::Duration::from_secs(60),
-            backoff_multiplier: 2.0,
+        base: ClientConfig {
+            server_addr: server_address.clone(),
+            reconnect: omnitak_client::ReconnectConfig {
+                enabled: true,
+                initial_backoff: std::time::Duration::from_secs(1),
+                max_backoff: std::time::Duration::from_secs(60),
+                backoff_multiplier: 2.0,
+                max_attempts: None,
+            },
+            ..Default::default()
         },
+        cert_config: TlsCertConfig {
+            source: cert_source,
+        },
+        server_name: Some(host.to_string()),
+        tls13_only: false,
+        verify_server: true,
+        framing: FramingMode::Xml,
     };
 
     // Create TLS client
-    let mut client = TlsClient::new(connection_id.clone(), tls_config);
+    let mut client = TlsClient::new(tls_config)
+        .map_err(|e| anyhow::anyhow!("Failed to create TLS client: {}", e))?;
 
     // Spawn connection task
-    let pool = state.pool.clone();
+    let conn_id = connection_id.clone();
     tokio::spawn(async move {
-        if let Err(e) = client.start(pool).await {
-            error!("TLS client error: {}", e);
+        info!(id = %conn_id, "Connecting TLS client from ADB");
+        if let Err(e) = client.connect_only().await {
+            error!(id = %conn_id, error = %e, "Failed to connect TLS client");
+        } else {
+            info!(id = %conn_id, "TLS client connected from ADB");
         }
     });
 
     // Add to connections list
     let conn_info = ConnectionInfo {
-        id: connection_id.to_string(),
-        address: server_address,
-        protocol: "tls".to_string(),
-        status: "connecting".to_string(),
-        connected_at: Some(chrono::Utc::now()),
-        last_activity: Some(chrono::Utc::now()),
+        id: *connection_id.as_uuid(),
+        name: format!("ADB-{}", device_serial),
+        connection_type: crate::types::ConnectionType::TlsClient,
+        status: crate::types::ConnectionStatus::Connecting,
+        address: host.to_string(),
+        port: port.parse().unwrap_or(8089),
         messages_sent: 0,
         messages_received: 0,
         bytes_sent: 0,
         bytes_received: 0,
+        connected_at: Some(chrono::Utc::now()),
+        last_activity: Some(chrono::Utc::now()),
+        error: None,
     };
 
     state.connections.write().await.push(conn_info);
