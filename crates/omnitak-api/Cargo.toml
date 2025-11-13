@@ -13,6 +13,7 @@ omnitak-cot = { path = "../omnitak-cot" }
 omnitak-cert = { path = "../omnitak-cert" }
 omnitak-adb = { path = "../omnitak-adb" }
 omnitak-discovery = { path = "../omnitak-discovery" }
+omnitak-plugin-api = { path = "../omnitak-plugin-api" }
 
 # Axum web framework
 axum = { version = "0.7", features = ["ws", "macros"] }
@@ -67,3 +68,10 @@ uuid = { version = "1.10", features = ["serde", "v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 dashmap = "6.1"
 governor = "0.7"
+
+[dev-dependencies]
+# Testing utilities
+tokio-test = "0.4"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+hyper = { version = "1.0", features = ["full"] }

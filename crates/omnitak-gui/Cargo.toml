@@ -11,6 +11,7 @@ omnitak-core = { path = "../omnitak-core" }
 omnitak-pool = { path = "../omnitak-pool" }
 omnitak-api = { path = "../omnitak-api" }
 omnitak-cot = { path = "../omnitak-cot" }
+omnitak-plugin-api = { path = "../omnitak-plugin-api" }
 
 # GUI framework
 eframe = { workspace = true }

@@ -1,5 +1,7 @@
 //! REST API endpoints using Axum
 
+pub mod plugins;
+
 use crate::auth::{AuthService, AuthUser, RequireAdmin, RequireOperator};
 use crate::middleware::AuditLogger;
 use crate::types::*;

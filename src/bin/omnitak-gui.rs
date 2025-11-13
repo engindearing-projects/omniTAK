@@ -3,6 +3,7 @@
 //! Desktop GUI for managing OmniTAK TAK server connections.
 
 use eframe::egui;
+use std::path::PathBuf;
 
 fn main() -> Result<(), eframe::Error> {
     // Set up logging
@@ -12,6 +13,24 @@ fn main() -> Result<(), eframe::Error> {
                 .add_directive(tracing::Level::INFO.into()),
         )
         .init();
+
+    // Parse command line arguments
+    let args: Vec<String> = std::env::args().collect();
+    let config_path = if args.len() > 2 && args[1] == "--config" {
+        Some(PathBuf::from(&args[2]))
+    } else {
+        // Default to config.yaml in current directory
+        let default_path = PathBuf::from("config.yaml");
+        if default_path.exists() {
+            Some(default_path)
+        } else {
+            None
+        }
+    };
+
+    if let Some(ref path) = config_path {
+        tracing::info!("Loading configuration from: {}", path.display());
+    }
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -28,9 +47,10 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
 
+    let config_path_clone = config_path.clone();
     eframe::run_native(
         "OmniTAK - TAK Server Aggregator",
         options,
-        Box::new(|cc| Ok(Box::new(omnitak_gui::OmniTakApp::new(cc)))),
+        Box::new(move |cc| Ok(Box::new(omnitak_gui::OmniTakApp::new(cc, config_path_clone)))),
     )
 }

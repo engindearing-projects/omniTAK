@@ -67,6 +67,10 @@ pub struct AppConfig {
     /// Service discovery configuration
     #[serde(default)]
     pub discovery: DiscoveryConfig,
+
+    /// Plugin system configuration
+    #[serde(default)]
+    pub plugins: PluginConfig,
 }
 
 impl AppConfig {
@@ -186,6 +190,9 @@ impl AppConfig {
         // Validate API configuration
         self.api.validate()?;
 
+        // Validate plugin configuration
+        self.plugins.validate()?;
+
         Ok(())
     }
 
@@ -246,6 +253,7 @@ impl AppConfig {
         self.api = other.api;
         self.metrics = other.metrics;
         self.storage = other.storage;
+        self.plugins = other.plugins;
     }
 
     /// Returns a server configuration by name.
@@ -711,6 +719,325 @@ pub enum StorageBackend {
     Postgres,
 }
 
+/// Plugin system configuration.
+///
+/// This configuration controls the OmniTAK plugin system, which allows extending
+/// the application with WebAssembly (WASM) plugins. Plugins can be used to:
+///
+/// - **Filter**: Process and filter TAK messages based on custom logic
+/// - **Transform**: Transform or enrich TAK messages with additional data
+///
+/// # Security
+///
+/// The plugin system uses a strict sandbox by default to ensure security:
+/// - No network access
+/// - No filesystem access
+/// - No environment variable access
+/// - Limited execution time and memory
+///
+/// These restrictions can be relaxed on a per-plugin basis if needed.
+///
+/// # Example
+///
+/// ```yaml
+/// plugins:
+///   plugin_dir: "./plugins"
+///   hot_reload: false
+///   resource_limits:
+///     max_execution_time_ms: 10000
+///     max_memory_bytes: 52428800
+///     max_concurrent_executions: 100
+///   sandbox_policy:
+///     allow_network: false
+///     allow_filesystem_read: false
+///     allow_filesystem_write: false
+///     allow_env_vars: false
+///     allowed_paths: []
+///   filters:
+///     - id: geofence-filter
+///       path: geofence_filter.wasm
+///       enabled: true
+///       config:
+///         min_lat: 35.1
+///         max_lat: 35.3
+///         min_lon: -79.1
+///         max_lon: -78.9
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginConfig {
+    /// Directory containing plugin files
+    #[serde(default = "default_plugin_dir")]
+    pub plugin_dir: String,
+
+    /// Enable hot-reload of plugins
+    #[serde(default)]
+    pub hot_reload: bool,
+
+    /// Resource limits for plugin execution
+    #[serde(default)]
+    pub resource_limits: ResourceLimitsConfig,
+
+    /// Sandbox security policy
+    #[serde(default)]
+    pub sandbox_policy: SandboxPolicyConfig,
+
+    /// Filter plugins to load at startup
+    #[serde(default)]
+    pub filters: Vec<FilterPluginConfig>,
+
+    /// Transformer plugins to load at startup
+    #[serde(default)]
+    pub transformers: Vec<TransformerPluginConfig>,
+}
+
+fn default_plugin_dir() -> String {
+    "./plugins".to_string()
+}
+
+impl Default for PluginConfig {
+    fn default() -> Self {
+        Self {
+            plugin_dir: default_plugin_dir(),
+            hot_reload: false,
+            resource_limits: ResourceLimitsConfig::default(),
+            sandbox_policy: SandboxPolicyConfig::default(),
+            filters: Vec::new(),
+            transformers: Vec::new(),
+        }
+    }
+}
+
+/// Resource limits configuration for plugins.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceLimitsConfig {
+    /// Maximum execution time in milliseconds
+    #[serde(default = "default_max_execution_time_ms")]
+    pub max_execution_time_ms: u64,
+
+    /// Maximum memory allocation in bytes
+    #[serde(default = "default_max_memory_bytes")]
+    pub max_memory_bytes: u64,
+
+    /// Maximum number of concurrent plugin executions
+    #[serde(default = "default_max_concurrent_executions")]
+    pub max_concurrent_executions: usize,
+}
+
+fn default_max_execution_time_ms() -> u64 {
+    10000 // 10 seconds
+}
+
+fn default_max_memory_bytes() -> u64 {
+    52_428_800 // 50 MB
+}
+
+fn default_max_concurrent_executions() -> usize {
+    100
+}
+
+impl Default for ResourceLimitsConfig {
+    fn default() -> Self {
+        Self {
+            max_execution_time_ms: default_max_execution_time_ms(),
+            max_memory_bytes: default_max_memory_bytes(),
+            max_concurrent_executions: default_max_concurrent_executions(),
+        }
+    }
+}
+
+impl ResourceLimitsConfig {
+    /// Get the maximum execution time as a Duration
+    pub fn max_execution_time(&self) -> Duration {
+        Duration::from_millis(self.max_execution_time_ms)
+    }
+}
+
+/// Sandbox policy configuration for plugins.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SandboxPolicyConfig {
+    /// Allow plugins to make network requests
+    #[serde(default)]
+    pub allow_network: bool,
+
+    /// Allow plugins to read from filesystem
+    #[serde(default)]
+    pub allow_filesystem_read: bool,
+
+    /// Allow plugins to write to filesystem
+    #[serde(default)]
+    pub allow_filesystem_write: bool,
+
+    /// Allow plugins to access environment variables
+    #[serde(default)]
+    pub allow_env_vars: bool,
+
+    /// Allowed filesystem paths (if filesystem access is enabled)
+    #[serde(default)]
+    pub allowed_paths: Vec<String>,
+}
+
+impl Default for SandboxPolicyConfig {
+    fn default() -> Self {
+        Self {
+            allow_network: false,
+            allow_filesystem_read: false,
+            allow_filesystem_write: false,
+            allow_env_vars: false,
+            allowed_paths: Vec::new(),
+        }
+    }
+}
+
+impl SandboxPolicyConfig {
+    /// Create a strict sandbox policy (no permissions)
+    pub fn strict() -> Self {
+        Self::default()
+    }
+
+    /// Create a permissive sandbox policy (all permissions)
+    pub fn permissive() -> Self {
+        Self {
+            allow_network: true,
+            allow_filesystem_read: true,
+            allow_filesystem_write: true,
+            allow_env_vars: true,
+            allowed_paths: vec!["/".to_string()],
+        }
+    }
+
+    /// Create a read-only filesystem policy
+    pub fn read_only_fs(paths: Vec<String>) -> Self {
+        Self {
+            allow_network: false,
+            allow_filesystem_read: true,
+            allow_filesystem_write: false,
+            allow_env_vars: false,
+            allowed_paths: paths,
+        }
+    }
+}
+
+/// Filter plugin configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilterPluginConfig {
+    /// Unique plugin identifier
+    pub id: String,
+
+    /// Path to the plugin WASM file (relative to plugin_dir or absolute)
+    pub path: String,
+
+    /// Whether the plugin is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Plugin-specific configuration (JSON object)
+    #[serde(default)]
+    pub config: serde_json::Value,
+}
+
+/// Transformer plugin configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransformerPluginConfig {
+    /// Unique plugin identifier
+    pub id: String,
+
+    /// Path to the plugin WASM file (relative to plugin_dir or absolute)
+    pub path: String,
+
+    /// Whether the plugin is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Plugin-specific configuration (JSON object)
+    #[serde(default)]
+    pub config: serde_json::Value,
+}
+
+impl PluginConfig {
+    /// Validates the plugin configuration.
+    pub fn validate(&self) -> Result<()> {
+        // Check that plugin directory exists or can be created
+        let plugin_path = Path::new(&self.plugin_dir);
+        if !plugin_path.exists() {
+            tracing::warn!(
+                "Plugin directory does not exist: {}. It will be created if needed.",
+                self.plugin_dir
+            );
+        }
+
+        // Validate filter plugin configs
+        for (i, filter) in self.filters.iter().enumerate() {
+            if filter.id.is_empty() {
+                return Err(ConfigError::InvalidValue {
+                    field: format!("plugins.filters[{}].id", i),
+                    reason: "Plugin ID cannot be empty".to_string(),
+                }
+                .into());
+            }
+
+            if filter.path.is_empty() {
+                return Err(ConfigError::InvalidValue {
+                    field: format!("plugins.filters[{}].path", i),
+                    reason: "Plugin path cannot be empty".to_string(),
+                }
+                .into());
+            }
+        }
+
+        // Validate transformer plugin configs
+        for (i, transformer) in self.transformers.iter().enumerate() {
+            if transformer.id.is_empty() {
+                return Err(ConfigError::InvalidValue {
+                    field: format!("plugins.transformers[{}].id", i),
+                    reason: "Plugin ID cannot be empty".to_string(),
+                }
+                .into());
+            }
+
+            if transformer.path.is_empty() {
+                return Err(ConfigError::InvalidValue {
+                    field: format!("plugins.transformers[{}].path", i),
+                    reason: "Plugin path cannot be empty".to_string(),
+                }
+                .into());
+            }
+        }
+
+        // Check for duplicate plugin IDs across filters and transformers
+        let mut seen_ids = std::collections::HashSet::new();
+        for filter in &self.filters {
+            if !seen_ids.insert(&filter.id) {
+                return Err(ConfigError::InvalidValue {
+                    field: "plugins".to_string(),
+                    reason: format!("Duplicate plugin ID: {}", filter.id),
+                }
+                .into());
+            }
+        }
+        for transformer in &self.transformers {
+            if !seen_ids.insert(&transformer.id) {
+                return Err(ConfigError::InvalidValue {
+                    field: "plugins".to_string(),
+                    reason: format!("Duplicate plugin ID: {}", transformer.id),
+                }
+                .into());
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Get the full path to a plugin file
+    pub fn get_plugin_path(&self, relative_path: &str) -> PathBuf {
+        let path = Path::new(relative_path);
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            Path::new(&self.plugin_dir).join(relative_path)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -898,5 +1225,187 @@ api:
             ..Default::default()
         };
         assert_eq!(metrics.interval(), Duration::from_secs(120));
+    }
+
+    #[test]
+    fn test_plugin_config_defaults() {
+        let plugin_config = PluginConfig::default();
+        assert_eq!(plugin_config.plugin_dir, "./plugins");
+        assert!(!plugin_config.hot_reload);
+        assert_eq!(
+            plugin_config.resource_limits.max_execution_time_ms,
+            10000
+        );
+        assert_eq!(
+            plugin_config.resource_limits.max_memory_bytes,
+            52_428_800
+        );
+        assert_eq!(
+            plugin_config.resource_limits.max_concurrent_executions,
+            100
+        );
+        assert!(!plugin_config.sandbox_policy.allow_network);
+        assert!(plugin_config.filters.is_empty());
+        assert!(plugin_config.transformers.is_empty());
+    }
+
+    #[test]
+    fn test_plugin_config_from_yaml() {
+        let yaml = r#"
+plugin_dir: "/opt/plugins"
+hot_reload: true
+resource_limits:
+  max_execution_time_ms: 5000
+  max_memory_bytes: 10485760
+  max_concurrent_executions: 50
+sandbox_policy:
+  allow_network: true
+  allow_filesystem_read: true
+  allow_filesystem_write: false
+  allow_env_vars: false
+  allowed_paths:
+    - "/tmp"
+    - "/data"
+filters:
+  - id: test-filter
+    path: test_filter.wasm
+    enabled: true
+    config:
+      threshold: 100
+transformers:
+  - id: test-transformer
+    path: test_transformer.wasm
+    enabled: false
+    config:
+      mode: strict
+"#;
+        let config: PluginConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.plugin_dir, "/opt/plugins");
+        assert!(config.hot_reload);
+        assert_eq!(config.resource_limits.max_execution_time_ms, 5000);
+        assert_eq!(config.resource_limits.max_memory_bytes, 10485760);
+        assert_eq!(config.resource_limits.max_concurrent_executions, 50);
+        assert!(config.sandbox_policy.allow_network);
+        assert!(config.sandbox_policy.allow_filesystem_read);
+        assert!(!config.sandbox_policy.allow_filesystem_write);
+        assert_eq!(config.sandbox_policy.allowed_paths.len(), 2);
+        assert_eq!(config.filters.len(), 1);
+        assert_eq!(config.filters[0].id, "test-filter");
+        assert!(config.filters[0].enabled);
+        assert_eq!(config.transformers.len(), 1);
+        assert_eq!(config.transformers[0].id, "test-transformer");
+        assert!(!config.transformers[0].enabled);
+    }
+
+    #[test]
+    fn test_plugin_config_validation() {
+        let mut config = PluginConfig::default();
+
+        // Valid config should pass
+        assert!(config.validate().is_ok());
+
+        // Add a valid filter
+        config.filters.push(FilterPluginConfig {
+            id: "filter1".to_string(),
+            path: "filter1.wasm".to_string(),
+            enabled: true,
+            config: serde_json::json!({}),
+        });
+        assert!(config.validate().is_ok());
+
+        // Empty ID should fail
+        config.filters.push(FilterPluginConfig {
+            id: String::new(),
+            path: "filter2.wasm".to_string(),
+            enabled: true,
+            config: serde_json::json!({}),
+        });
+        assert!(config.validate().is_err());
+
+        // Reset
+        config.filters.clear();
+
+        // Duplicate IDs should fail
+        config.filters.push(FilterPluginConfig {
+            id: "duplicate".to_string(),
+            path: "filter1.wasm".to_string(),
+            enabled: true,
+            config: serde_json::json!({}),
+        });
+        config.transformers.push(TransformerPluginConfig {
+            id: "duplicate".to_string(),
+            path: "transformer1.wasm".to_string(),
+            enabled: true,
+            config: serde_json::json!({}),
+        });
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_plugin_path_resolution() {
+        let config = PluginConfig {
+            plugin_dir: "/opt/plugins".to_string(),
+            ..Default::default()
+        };
+
+        // Relative path should be joined with plugin_dir
+        let path = config.get_plugin_path("test.wasm");
+        assert_eq!(path, PathBuf::from("/opt/plugins/test.wasm"));
+
+        // Absolute path should be used as-is
+        let path = config.get_plugin_path("/absolute/path/test.wasm");
+        assert_eq!(path, PathBuf::from("/absolute/path/test.wasm"));
+    }
+
+    #[test]
+    fn test_full_config_with_plugins() {
+        let yaml = r#"
+app:
+  name: test-app
+  environment: development
+
+servers:
+  - name: tak-server-1
+    host: 192.168.1.100
+    port: 8089
+    protocol: tcp
+    enabled: true
+
+plugins:
+  plugin_dir: ./plugins
+  hot_reload: false
+  resource_limits:
+    max_execution_time_ms: 10000
+    max_memory_bytes: 52428800
+    max_concurrent_executions: 100
+  sandbox_policy:
+    allow_network: false
+    allow_filesystem_read: false
+    allow_filesystem_write: false
+    allow_env_vars: false
+    allowed_paths: []
+  filters:
+    - id: geofence
+      path: geofence.wasm
+      enabled: true
+      config:
+        min_lat: 35.0
+        max_lat: 36.0
+  transformers: []
+
+api:
+  enabled: true
+  host: 127.0.0.1
+  port: 8080
+"#;
+
+        let config = AppConfig::from_yaml(yaml).unwrap();
+        assert_eq!(config.app.name, "test-app");
+        assert_eq!(config.plugins.plugin_dir, "./plugins");
+        assert_eq!(config.plugins.filters.len(), 1);
+        assert_eq!(config.plugins.filters[0].id, "geofence");
+
+        // Validation should pass
+        assert!(config.validate().is_ok());
     }
 }

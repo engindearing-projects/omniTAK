@@ -1,0 +1,154 @@
+// OmniTAK Plugin Interface Definition (WIT)
+// WebAssembly Component Model interface for TAK plugins
+
+package omnitak:plugin@0.1.0;
+
+/// Core TAK message filtering interface
+interface filter {
+    /// Represents a CoT (Cursor on Target) message for filtering
+    record cot-message {
+        /// CoT event type (e.g., "a-f-G-E-V")
+        cot-type: string,
+        /// Unique identifier for this message
+        uid: string,
+        /// Callsign/name of the entity
+        callsign: option<string>,
+        /// Group name
+        group: option<string>,
+        /// Team color (e.g., "cyan", "yellow")
+        team: option<string>,
+        /// Latitude in decimal degrees
+        lat: float64,
+        /// Longitude in decimal degrees
+        lon: float64,
+        /// Height above ellipsoid in meters
+        hae: option<float64>,
+        /// Message timestamp (ISO 8601 format)
+        time: string,
+        /// Full XML payload (optional, for advanced filtering)
+        xml-payload: option<string>,
+    }
+
+    /// Result of filter evaluation
+    enum filter-result {
+        /// Allow message to pass through
+        pass,
+        /// Block message from being forwarded
+        block,
+    }
+
+    /// Evaluate whether a message should pass through the filter
+    evaluate: func(msg: cot-message) -> filter-result;
+
+    /// Get human-readable description of the filter
+    describe: func() -> string;
+
+    /// Get filter metadata
+    get-metadata: func() -> filter-metadata;
+}
+
+/// Message transformation interface
+interface transformer {
+    /// Transform a message payload
+    /// Returns the transformed payload or error message
+    transform: func(data: list<u8>) -> result<list<u8>, string>;
+
+    /// Check if transformer can handle this message type
+    can-transform: func(cot-type: string) -> bool;
+
+    /// Get transformer metadata
+    get-metadata: func() -> transformer-metadata;
+}
+
+/// Plugin metadata and capabilities
+interface metadata {
+    /// Plugin metadata
+    record filter-metadata {
+        id: string,
+        name: string,
+        version: string,
+        author: string,
+        description: string,
+        /// Maximum expected execution time in microseconds
+        max-execution-time-us: u64,
+    }
+
+    record transformer-metadata {
+        id: string,
+        name: string,
+        version: string,
+        author: string,
+        description: string,
+        /// Supported CoT types (e.g., ["a-f-*", "a-h-*"])
+        supported-types: list<string>,
+    }
+
+    /// Plugin capability flags
+    flags plugin-capabilities {
+        /// Can filter messages
+        filter,
+        /// Can transform messages
+        transform,
+        /// Requires network access (for security checks)
+        network-access,
+        /// Requires filesystem access
+        filesystem-access,
+    }
+
+    /// Complete plugin information
+    record plugin-info {
+        id: string,
+        name: string,
+        version: string,
+        author: string,
+        description: string,
+        capabilities: plugin-capabilities,
+        /// SHA-256 hash of the plugin binary for verification
+        binary-hash: string,
+    }
+}
+
+/// Host functions available to plugins
+interface host {
+    /// Log a message from the plugin (for debugging)
+    log: func(level: log-level, message: string);
+
+    /// Get current system time in milliseconds since epoch
+    get-current-time-ms: func() -> u64;
+
+    /// Query geographic database (if available)
+    query-elevation: func(lat: float64, lon: float64) -> option<float64>;
+
+    enum log-level {
+        trace,
+        debug,
+        info,
+        warn,
+        error,
+    }
+}
+
+/// Main plugin world - defines the complete plugin contract
+world plugin {
+    /// Plugin imports (what the plugin can call)
+    import host;
+
+    /// Plugin exports (what the host can call)
+    export filter;
+    export transformer;
+    export metadata;
+}
+
+/// Filter-only plugin world (for simpler plugins)
+world filter-plugin {
+    import host;
+    export filter;
+    export metadata;
+}
+
+/// Transformer-only plugin world
+world transformer-plugin {
+    import host;
+    export transformer;
+    export metadata;
+}

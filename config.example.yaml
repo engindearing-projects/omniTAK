@@ -133,3 +133,122 @@ security:
   cors_origins:
     - "http://localhost:3000"
     - "https://your-dashboard.example.com"
+
+# Plugin System Configuration
+plugins:
+  # Directory containing plugin WASM files
+  plugin_dir: "./plugins"
+
+  # Enable hot-reload (development only - automatic reload when plugin files change)
+  hot_reload: false
+
+  # Resource limits for plugin execution
+  resource_limits:
+    # Maximum execution time per plugin call (milliseconds)
+    max_execution_time_ms: 10000  # 10 seconds
+
+    # Maximum memory per plugin instance (bytes)
+    max_memory_bytes: 52428800  # 50 MB
+
+    # Maximum number of concurrent plugin executions
+    max_concurrent_executions: 100
+
+  # Sandbox security policy - controls what plugins can access
+  sandbox_policy:
+    # Network access (required for source/transformer plugins that fetch data)
+    allow_network: false
+
+    # Filesystem read access (for plugins that need to read data files)
+    allow_filesystem_read: false
+
+    # Filesystem write access (for plugins that need to write logs/cache)
+    allow_filesystem_write: false
+
+    # Environment variable access
+    allow_env_vars: false
+
+    # Specific filesystem paths that are accessible (if filesystem access enabled)
+    allowed_paths: []
+
+  # Filter plugins - process and filter TAK messages
+  filters:
+    # Example: Geographic boundary filter
+    - id: geofence-filter
+      path: "geofence_filter.wasm"  # Relative to plugin_dir or absolute path
+      enabled: true
+      config:
+        description: "Filter messages outside operational area"
+        min_lat: 35.1
+        max_lat: 35.3
+        min_lon: -79.1
+        max_lon: -78.9
+
+    # Example: Affiliation-based filter
+    - id: affiliation-filter
+      path: "affiliation_filter.wasm"
+      enabled: true
+      config:
+        description: "Only allow friendly forces"
+        allowed_affiliations: ["friend", "assumed_friend", "neutral"]
+        block_hostile: true
+
+    # Example: Message type filter
+    - id: type-filter
+      path: "type_filter.wasm"
+      enabled: false
+      config:
+        description: "Filter by CoT event type"
+        allowed_types: ["a-f-G", "a-f-A", "a-h-G"]
+        block_types: ["a-h-A"]
+
+  # Transformer plugins - transform or enrich TAK messages
+  transformers:
+    # Example: FlightRadar24 aircraft data source
+    - id: flightradar24-source
+      path: "flightradar24_source.wasm"
+      enabled: true
+      config:
+        description: "Import aircraft from FlightRadar24"
+        # Center point for area of interest
+        center_lat: 35.0
+        center_lon: -79.0
+        # Search radius in degrees
+        radius_degrees: 2.0
+        # Update interval in seconds
+        update_interval_secs: 30
+        # Convert to TAK friendly aircraft icons
+        friendly_icon: true
+        # Minimum altitude to include (feet)
+        min_altitude_ft: 0
+        # API credentials (use environment variables in production)
+        # api_key: "${FR24_API_KEY}"
+
+    # Example: Position enrichment
+    - id: position-enricher
+      path: "position_enricher.wasm"
+      enabled: false
+      config:
+        description: "Enrich position data with terrain/elevation"
+        # Add altitude above mean sea level
+        add_altitude_msl: true
+        # Add speed over ground
+        add_speed: true
+        # Add bearing/heading
+        add_bearing: true
+        # Terrain data source
+        terrain_data_path: "./data/terrain"
+
+    # Example: Geocoding transformer
+    - id: geocoder
+      path: "geocoder.wasm"
+      enabled: false
+      config:
+        description: "Add place names to position reports"
+        # Reverse geocode positions to addresses
+        add_address: true
+        # Add nearest city
+        add_city: true
+        # Cache size (number of entries)
+        cache_size: 1000
+        # Geocoding API endpoint
+        # api_endpoint: "https://nominatim.openstreetmap.org"

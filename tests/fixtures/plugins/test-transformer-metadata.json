@@ -1,0 +1,33 @@
+{
+  "id": "test-transformer-plugin",
+  "name": "Test Transformer Plugin",
+  "version": "0.1.0",
+  "author": "OmniTAK Test Suite",
+  "description": "A test transformer plugin for integration testing. Transforms CoT message attributes.",
+  "supportedTypes": ["a-*", "b-*"],
+  "capabilities": ["transform"],
+  "config": {
+    "enabled": true,
+    "transformations": [
+      {
+        "name": "Add test marker",
+        "targetField": "detail.remarks",
+        "operation": "append",
+        "value": " [TRANSFORMED]"
+      },
+      {
+        "name": "Normalize coordinates",
+        "targetField": "point",
+        "operation": "normalize",
+        "precision": 6
+      }
+    ],
+    "preserveOriginal": true,
+    "logTransformations": true
+  },
+  "resourceLimits": {
+    "maxMemoryBytes": 10485760,
+    "maxExecutionTimeUs": 2000,
+    "maxCpuPercent": 50
+  }
+}

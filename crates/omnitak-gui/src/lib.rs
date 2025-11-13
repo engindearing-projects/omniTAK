@@ -162,7 +162,6 @@ pub struct MessageLog {
 }
 
 /// UI state (not serialized).
-#[derive(Default)]
 pub struct UiState {
     /// Currently selected tab
     pub selected_tab: Tab,
@@ -187,6 +186,25 @@ pub struct UiState {
 
     /// Expanded message IDs (for collapsible cards)
     pub expanded_messages: std::collections::HashSet<String>,
+
+    /// Plugin panel state
+    pub plugin_panel: ui::plugins::PluginPanelState,
+}
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self {
+            selected_tab: Tab::default(),
+            server_dialog: None,
+            message_filter: String::new(),
+            affiliation_filter: AffiliationFilter::default(),
+            server_filter: String::new(),
+            auto_scroll: true,
+            message_details_dialog: None,
+            expanded_messages: std::collections::HashSet::new(),
+            plugin_panel: ui::plugins::PluginPanelState::default(),
+        }
+    }
 }
 
 /// Affiliation filter options
@@ -209,6 +227,7 @@ pub enum Tab {
     Dashboard,
     Connections,
     Messages,
+    Plugins,
     Settings,
 }
 
@@ -334,9 +353,25 @@ impl ServerDialogState {
 
 impl OmniTakApp {
     /// Creates a new OmniTAK GUI application.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // Load previous state if available
-        let state = if let Some(storage) = cc.storage {
+    pub fn new(cc: &eframe::CreationContext<'_>, config_path: Option<PathBuf>) -> Self {
+        // Load state from config file if provided, otherwise use storage
+        let mut state: AppState = if let Some(ref path) = config_path {
+            // Try to load from config file using gui-servers.yaml format
+            match import_config(path) {
+                Ok(config) => {
+                    tracing::info!("Loaded {} servers from {}", config.servers.len(), path.display());
+                    AppState {
+                        servers: config.servers,
+                        ..Default::default()
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to load config from {}: {}, using default", path.display(), e);
+                    Default::default()
+                }
+            }
+        } else if let Some(storage) = cc.storage {
+            // Fall back to eframe storage
             eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
         } else {
             Default::default()
@@ -827,6 +862,13 @@ impl eframe::App for OmniTakApp {
                 }
 
                 if ui
+                    .selectable_label(self.ui_state.selected_tab == Tab::Plugins, "🔌 Plugins")
+                    .clicked()
+                {
+                    self.ui_state.selected_tab = Tab::Plugins;
+                }
+
+                if ui
                     .selectable_label(self.ui_state.selected_tab == Tab::Settings, "⚙ Settings")
                     .clicked()
                 {
@@ -840,6 +882,15 @@ impl eframe::App for OmniTakApp {
             Tab::Dashboard => ui::dashboard::show(ui, &self.state),
             Tab::Connections => ui::connections::show(ui, self),
             Tab::Messages => ui::messages::show(ui, &self.state, &mut self.ui_state),
+            Tab::Plugins => {
+                if let Some((message, level)) = ui::plugins::render_plugins_panel(
+                    ui,
+                    &self.state,
+                    &mut self.ui_state.plugin_panel,
+                ) {
+                    self.show_status(message, level, 5);
+                }
+            }
             Tab::Settings => ui::settings::show(ui, self),
         });
 

@@ -10,6 +10,7 @@ members = [
     "crates/omnitak-gui",
     "crates/omnitak-adb",
     "crates/omnitak-discovery",
+    "crates/omnitak-plugin-api",
 ]
 resolver = "2"
 
@@ -130,6 +131,7 @@ omnitak-api = { path = "crates/omnitak-api" }
 omnitak-gui = { path = "crates/omnitak-gui" }
 omnitak-adb = { path = "crates/omnitak-adb" }
 omnitak-discovery = { path = "crates/omnitak-discovery" }
+omnitak-plugin-api = { path = "crates/omnitak-plugin-api" }
 
 tokio = { workspace = true }
 tokio-stream = "0.1"
@@ -145,6 +147,11 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 eframe = { workspace = true }
 egui = { workspace = true }
+
+[dev-dependencies]
+# Integration test dependencies
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+tokio-test = "0.4"
 
 [profile.release]
 opt-level = 3

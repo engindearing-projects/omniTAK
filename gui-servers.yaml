@@ -1,0 +1,17 @@
+servers:
+  - name: "Local Taky Server"
+    host: "127.0.0.1"
+    port: 8087
+    protocol: "tcp"
+    enabled: true
+
+  - name: "TAK Server 5.5"
+    host: "127.0.0.1"
+    port: 8089
+    protocol: "tls"
+    enabled: true
+    tls:
+      ca_cert_path: "/Users/iesouskurios/omniTAK/certs/ca.pem"
+      client_cert_path: "/Users/iesouskurios/omniTAK/certs/omnitak-desktop.pem"
+      client_key_path: "/Users/iesouskurios/omniTAK/certs/omnitak-desktop.key"
+      verify_cert: true

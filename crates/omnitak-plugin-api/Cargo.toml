@@ -1,0 +1,41 @@
+[package]
+name = "omnitak-plugin-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Core types
+omnitak-core = { path = "../omnitak-core" }
+omnitak-cot = { path = "../omnitak-cot" }
+
+# WASM runtime
+wasmtime = { version = "27", features = ["component-model", "async", "cranelift"] }
+wasmtime-wasi = "27"
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = "0.1"
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Concurrency
+dashmap = { workspace = true }
+parking_lot = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Security & hashing
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]
+tokio-test = "0.4"

@@ -1,0 +1,31 @@
+{
+  "id": "test-filter-plugin",
+  "name": "Test Filter Plugin",
+  "version": "0.1.0",
+  "author": "OmniTAK Test Suite",
+  "description": "A test filter plugin for integration testing. Filters CoT messages based on configurable rules.",
+  "maxExecutionTimeUs": 1000,
+  "capabilities": ["filter"],
+  "config": {
+    "enabled": true,
+    "rules": [
+      {
+        "name": "Allow friendly units",
+        "pattern": "^a-f-",
+        "action": "allow"
+      },
+      {
+        "name": "Block hostile units",
+        "pattern": "^a-h-",
+        "action": "deny"
+      }
+    ],
+    "defaultAction": "allow",
+    "logMatches": true
+  },
+  "resourceLimits": {
+    "maxMemoryBytes": 10485760,
+    "maxExecutionTimeUs": 1000,
+    "maxCpuPercent": 50
+  }
+}

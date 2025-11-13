@@ -121,3 +121,81 @@ storage:
   data_dir: ./data
   retention_secs: 0  # 0 = unlimited
   max_size_bytes: 0  # 0 = unlimited
+
+# Plugin system configuration
+plugins:
+  # Directory containing plugin files (.wasm)
+  plugin_dir: ./plugins
+
+  # Enable hot-reload of plugins (development only)
+  hot_reload: false
+
+  # Resource limits for plugin execution
+  resource_limits:
+    # Maximum execution time per plugin call (milliseconds)
+    max_execution_time_ms: 10000  # 10 seconds
+    # Maximum memory per plugin (bytes)
+    max_memory_bytes: 52428800  # 50 MB
+    # Maximum concurrent plugin executions
+    max_concurrent_executions: 100
+
+  # Sandbox security policy
+  sandbox_policy:
+    # Allow plugins to make network requests
+    allow_network: false
+    # Allow plugins to read from filesystem
+    allow_filesystem_read: false
+    # Allow plugins to write to filesystem
+    allow_filesystem_write: false
+    # Allow plugins to access environment variables
+    allow_env_vars: false
+    # Allowed filesystem paths (if filesystem access enabled)
+    allowed_paths: []
+
+  # Filter plugins to load at startup
+  filters:
+    # Example: Geofence filter
+    - id: geofence-filter
+      path: geofence_filter.wasm  # Relative to plugin_dir
+      enabled: true
+      config:
+        # Plugin-specific configuration (passed to plugin)
+        min_lat: 35.1
+        max_lat: 35.3
+        min_lon: -79.1
+        max_lon: -78.9
+
+    # Example: Affiliation filter
+    - id: affiliation-filter
+      path: affiliation_filter.wasm
+      enabled: true
+      config:
+        allowed_affiliations: ["friend", "assumed_friend"]
+        block_hostile: true
+
+  # Transformer plugins to load at startup
+  transformers:
+    # Example: FlightRadar24 data source
+    - id: flightradar24-source
+      path: flightradar24_source.wasm
+      enabled: true
+      config:
+        # Center point for area of interest
+        center_lat: 35.0
+        center_lon: -79.0
+        # Radius in degrees
+        radius_degrees: 2.0
+        # Update interval in seconds
+        update_interval_secs: 30
+        # API key (use environment variable in production)
+        # api_key: "${FR24_API_KEY}"
+
+    # Example: Position enrichment transformer
+    - id: position-enricher
+      path: position_enricher.wasm
+      enabled: false
+      config:
+        # Add altitude MSL from terrain data
+        add_altitude_msl: true
+        # Add speed over ground
+        add_speed: true

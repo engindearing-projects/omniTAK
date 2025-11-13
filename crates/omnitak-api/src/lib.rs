@@ -46,6 +46,7 @@ use middleware::{
     RateLimitState, ReadinessState, cors_layer, logging_middleware, rate_limit_middleware,
     request_id_middleware, security_headers_middleware, timeout_middleware,
 };
+use omnitak_plugin_api::PluginManager;
 use omnitak_pool::{
     AggregatorConfig, ConcurrencyConfig, ConnectionPool, DistributionStrategy, DistributorConfig,
     MessageAggregator, MessageDistributor, PoolConfig,
@@ -138,6 +139,16 @@ impl Default for ServerConfig {
         rest::login,
         rest::create_api_key,
         rest::get_audit_logs,
+        rest::plugins::list_plugins,
+        rest::plugins::load_plugin,
+        rest::plugins::get_plugin_details,
+        rest::plugins::unload_plugin,
+        rest::plugins::update_plugin_config,
+        rest::plugins::toggle_plugin,
+        rest::plugins::get_plugin_metrics,
+        rest::plugins::get_plugin_health,
+        rest::plugins::reload_plugin,
+        rest::plugins::reload_all_plugins,
     ),
     components(
         schemas(
@@ -174,6 +185,7 @@ impl Default for ServerConfig {
         (name = "metrics", description = "Prometheus metrics"),
         (name = "auth", description = "Authentication"),
         (name = "audit", description = "Audit logs"),
+        (name = "plugins", description = "Plugin management"),
     ),
     modifiers(&SecurityAddon)
 )]
@@ -309,14 +321,23 @@ impl Server {
         ));
 
         // Create application state
+        let audit_logger = Arc::new(middleware::AuditLogger::new());
         let api_state = ApiState {
             auth_service: self.auth_service.clone(),
-            audit_logger: Arc::new(middleware::AuditLogger::new()),
+            audit_logger: audit_logger.clone(),
             pool: pool.clone(),
             distributor: distributor.clone(),
             connections: Arc::new(RwLock::new(Vec::new())),
             start_time: std::time::Instant::now(),
             discovery: None, // TODO: Initialize discovery service if enabled in config
+        };
+
+        // Initialize plugin manager
+        info!("Initializing plugin manager");
+        let plugin_manager = Arc::new(RwLock::new(PluginManager::new()));
+        let plugin_state = rest::plugins::PluginApiState {
+            plugin_manager,
+            audit_logger: audit_logger.clone(),
         };
 
         let ws_state = websocket::WsState::new(self.auth_service.clone());
@@ -328,6 +349,9 @@ impl Server {
 
         // Add REST API routes
         app = app.merge(rest::create_rest_router(api_state.clone()));
+
+        // Add plugin management routes
+        app = app.merge(rest::plugins::create_plugin_router(plugin_state));
 
         // Add WebSocket routes
         app = app.merge(websocket::create_ws_router(ws_state.clone()));
