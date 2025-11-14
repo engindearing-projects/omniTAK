@@ -1,0 +1,31 @@
+// Message Filter Plugin Interface Definition
+// This defines the contract between the omniTAK host and message filter plugins
+
+package omnitak:plugins@0.1.0;
+
+// Host interface - what the host exposes to plugins
+interface host {
+    // Log a message to the host's logging system
+    log: func(message: string);
+
+    // Log a structured message with key-value properties
+    log-structured: func(message: string, properties: list<tuple<string, string>>);
+}
+
+// Message Filter Plugin interface - what plugins expose to the host
+interface message-filter {
+    // Filter and optionally modify a CoT XML message
+    // Returns: result containing the (possibly modified) message or an error
+    filter-message: func(cot-xml: string) -> result<string, string>;
+
+    // Get plugin metadata
+    get-name: func() -> string;
+    get-version: func() -> string;
+    get-description: func() -> string;
+}
+
+// World definition - combines imports and exports
+world filter {
+    import host;
+    export message-filter;
+}

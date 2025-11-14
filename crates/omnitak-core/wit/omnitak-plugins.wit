@@ -1,0 +1,89 @@
+// OmniTAK Plugin Interface Definition
+// This defines the interface between the host (OmniTAK core) and WASM plugins
+// for message filtering and processing
+
+package omnitak:plugins@0.1.0;
+
+// Host interface - functions provided by OmniTAK to plugins
+interface host {
+    // Basic logging
+    log: func(level: log-level, message: string);
+
+    // Get configuration value by key
+    get-config: func(key: string) -> option<string>;
+
+    // Get server information
+    get-server-info: func(server-id: string) -> option<server-info>;
+
+    // Log level for plugin logging
+    enum log-level {
+        trace,
+        debug,
+        info,
+        warn,
+        error,
+    }
+
+    // Server information exposed to plugins
+    record server-info {
+        id: string,
+        name: string,
+        host: string,
+        port: u16,
+        protocol: string,
+    }
+}
+
+// Plugin interface - functions that plugins must implement
+interface message-filter {
+    // Filter a CoT message
+    // Returns: option<string> - Some(modified_xml) to pass through (potentially modified),
+    //                           None to drop the message
+    filter-message: func(xml: string, metadata: message-metadata) -> result<filter-result, string>;
+
+    // Initialize the plugin (called once on load)
+    initialize: func(config: list<tuple<string, string>>) -> result<_, string>;
+
+    // Shutdown the plugin (called on unload)
+    shutdown: func() -> result<_, string>;
+
+    // Get plugin information
+    get-info: func() -> plugin-info;
+
+    // Message metadata provided to plugins
+    record message-metadata {
+        server-id: string,
+        server-name: string,
+        received-at: u64,  // Unix timestamp in milliseconds
+        source-addr: option<string>,
+        protocol: string,
+    }
+
+    // Result of filtering operation
+    record filter-result {
+        action: filter-action,
+        modified-xml: option<string>,
+        reason: option<string>,
+    }
+
+    // Action to take with the message
+    enum filter-action {
+        pass,      // Pass message unchanged
+        modify,    // Pass modified message
+        drop,      // Drop the message
+    }
+
+    // Plugin metadata
+    record plugin-info {
+        name: string,
+        version: string,
+        description: string,
+        author: string,
+    }
+}
+
+// The world that message filter plugins must implement
+world message-filter-plugin {
+    import host;
+    export message-filter;
+}

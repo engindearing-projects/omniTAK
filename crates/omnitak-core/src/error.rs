@@ -42,6 +42,10 @@ pub enum OmniTAKError {
     #[error("Timeout error: {0}")]
     Timeout(#[from] TimeoutError),
 
+    /// Plugin system errors
+    #[error("Plugin error: {0}")]
+    PluginError(String),
+
     /// Internal errors that shouldn't normally occur
     #[error("Internal error: {0}")]
     Internal(String),

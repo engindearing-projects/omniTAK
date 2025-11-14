@@ -1,0 +1,16 @@
+[package]
+name = "example-filter"
+version = "0.1.0"
+edition = "2021"
+description = "Example CoT message filter plugin for omniTAK"
+license = "MIT OR Apache-2.0"
+authors = ["omniTAK Team"]
+
+[dependencies]
+wit-bindgen = "0.47.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]
+# This is a standalone plugin, not part of the parent workspace

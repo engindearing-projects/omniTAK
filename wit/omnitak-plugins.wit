@@ -1,0 +1,68 @@
+// OmniTAK Plugin System WIT Definitions
+// Note that names *cannot* use underscores, but *can* use dashes
+// (In Rust the dashes are converted to underscores, as usual)
+
+package omnitak:plugins@1.0.0;
+
+// Plugin metadata record - describes a plugin
+record plugin-metadata {
+    name: string,
+    version: string,
+    description: string,
+}
+
+// This is what the host (OmniTAK) will expose to our plugins
+
+interface host {
+    // Logging capabilities
+    log: func(message: string);
+
+    log-structured: func(message: string, properties: map-resource);
+
+    // Configuration access
+    get-config: func(key: string) -> option<string>;
+
+    set-config: func(key: string, value: string);
+
+    // WIT doesn't have a map type, but we can implement it as a resource
+    // Note the "inner()" function --
+    // It is a practice to provide such a function (when it makes sense)
+    // that can get all the resource's internal data atomically (at once) in a single call
+
+    resource map-resource {
+        constructor(key-value-pairs: list<tuple<string, string>>);
+        inner: func() -> list<tuple<string, string>>;
+        length: func() -> u64;
+        get: func(key: string) -> option<string>;
+        set: func(key: string, value: string);
+    }
+}
+
+// This is what our plugins will expose to the host
+
+interface message-filter {
+    // Get plugin metadata
+    get-metadata: func() -> plugin-metadata;
+
+    // Filter a CoT (Cursor on Target) XML message
+    // Input: CoT message as XML string
+    // Output: Filtered message or error
+    filter-cot-message: func(message: string) -> result<string, string>;
+
+    // Optional: Check if plugin is enabled/initialized
+    is-enabled: func() -> bool;
+
+    // Optional: Initialize plugin with configuration
+    initialize: func(config: map-resource) -> result<string, string>;
+
+    // Optional: Clean up and shutdown plugin
+    shutdown: func() -> result<string, string>;
+}
+
+// World definition for message filter plugins
+// Plugins implementing this world can filter CoT messages
+
+world message-filter {
+    import host;
+    export message-filter;
+}

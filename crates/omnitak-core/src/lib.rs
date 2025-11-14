@@ -40,6 +40,7 @@
 pub mod config;
 pub mod discovery_config;
 pub mod error;
+pub mod plugins;
 pub mod types;
 
 // Re-export commonly used types for convenience

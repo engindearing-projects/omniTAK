@@ -26,3 +26,7 @@ config = { workspace = true }
 
 # Logging
 tracing = { workspace = true }
+
+# WebAssembly
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }

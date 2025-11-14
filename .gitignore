@@ -43,3 +43,6 @@ examples/
 __pycache__/
 *.pyc
 gui-servers.yaml
+
+# Plugin build artifacts
+plugins/*/target/

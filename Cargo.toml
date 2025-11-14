@@ -88,6 +88,10 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 # Regex for filtering
 regex = "1.11"
 
+# WebAssembly runtime and WASI support
+wasmtime = "38.0.3"
+wasmtime-wasi = "38.0.3"
+
 # HTTP client (for federation)
 reqwest = { version = "0.12", features = ["rustls-tls", "json"] }
 
