@@ -203,6 +203,9 @@ impl TlsClient {
     fn build_tls_config(config: &TlsClientConfig) -> Result<RustlsConfig> {
         info!("Building TLS configuration");
 
+        // Install crypto provider if not already installed
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
         // Load or parse certificate bundle based on source
         let bundle = match &config.cert_config.source {
             TlsCertSource::Files {

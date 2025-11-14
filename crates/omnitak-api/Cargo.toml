@@ -53,8 +53,8 @@ metrics-exporter-prometheus = "0.15"
 utoipa = { version = "5.3", features = ["axum_extras", "chrono", "uuid"] }
 
 # Security
-rustls = "0.23"
-tokio-rustls = "0.26"
+rustls = { version = "0.23", features = ["std", "ring"] }
+tokio-rustls = { version = "0.26", features = ["ring"] }
 
 # Static file embedding
 rust-embed = { version = "8.5", features = ["compression"] }

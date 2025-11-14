@@ -50,23 +50,35 @@ struct ConnectionListResponse {
     total: usize,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ConnectionType {
+    TcpClient,
+    TcpServer,
+    TlsClient,
+    TlsServer,
+    Multicast,
+    Udp,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionInfo {
     pub id: String,
     pub name: String,
-    pub address: String,
-    pub protocol: String,
+    pub connection_type: ConnectionType,
     pub status: String,
-    pub priority: Option<u8>,
-    pub messages_received: Option<u64>,
-    pub messages_sent: Option<u64>,
+    pub address: String,
+    pub port: u16,
+    pub messages_received: u64,
+    pub messages_sent: u64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CreateConnectionRequest {
     pub name: String,
+    pub connection_type: ConnectionType,
     pub address: String,
-    pub protocol: String,
+    pub port: u16,
     pub priority: Option<u8>,
 }
 

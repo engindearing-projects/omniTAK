@@ -254,7 +254,7 @@ fn show_message_card(ui: &mut egui::Ui, msg: &MessageLog, ui_state: &mut UiState
                         .clicked()
                     {
                         let coords = format!("{:.6}, {:.6}", lat, lon);
-                        ui.output_mut(|o| o.copied_text = coords);
+                        ui.ctx().copy_text(coords);
                     }
                 }
 
@@ -503,7 +503,7 @@ fn show_message_details_dialog(ctx: &egui::Context, ui_state: &mut UiState) {
                         ui.add_space(10.0);
 
                         if ui.button("Copy Raw Content").clicked() {
-                            ui.output_mut(|o| o.copied_text = raw.clone());
+                            ui.ctx().copy_text(raw.clone());
                         }
                     }
                 });

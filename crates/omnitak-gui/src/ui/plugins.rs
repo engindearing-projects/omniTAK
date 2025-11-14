@@ -74,7 +74,7 @@ pub struct ConfigEditorDialog {
 /// Render the plugins panel
 pub fn render_plugins_panel(
     ui: &mut egui::Ui,
-    state: &Arc<Mutex<AppState>>,
+    _state: &Arc<Mutex<AppState>>,
     panel_state: &mut PluginPanelState,
 ) -> Option<(String, StatusLevel)> {
     let mut status_message = None;
@@ -145,6 +145,7 @@ pub fn render_plugins_panel(
         });
 
     // Load plugin dialog
+    let mut close_load_dialog = false;
     if let Some(ref mut dialog) = panel_state.load_dialog {
         let mut open = true;
         egui::Window::new("Load Plugin")
@@ -154,16 +155,20 @@ pub fn render_plugins_panel(
             .show(ui.ctx(), |ui| {
                 if let Some(msg) = render_load_plugin_dialog(ui, dialog) {
                     status_message = Some(msg);
-                    panel_state.load_dialog = None;
+                    close_load_dialog = true;
                 }
             });
 
         if !open {
-            panel_state.load_dialog = None;
+            close_load_dialog = true;
         }
+    }
+    if close_load_dialog {
+        panel_state.load_dialog = None;
     }
 
     // Config editor dialog
+    let mut close_config_editor = false;
     if let Some(ref mut dialog) = panel_state.config_editor {
         let mut open = true;
         egui::Window::new(format!("Configure Plugin: {}", dialog.plugin_id))
@@ -174,13 +179,16 @@ pub fn render_plugins_panel(
             .show(ui.ctx(), |ui| {
                 if let Some(msg) = render_config_editor_dialog(ui, dialog) {
                     status_message = Some(msg);
-                    panel_state.config_editor = None;
+                    close_config_editor = true;
                 }
             });
 
         if !open {
-            panel_state.config_editor = None;
+            close_config_editor = true;
         }
+    }
+    if close_config_editor {
+        panel_state.config_editor = None;
     }
 
     status_message

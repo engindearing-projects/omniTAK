@@ -61,6 +61,11 @@ fn default_enable_tls() -> bool {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Install default crypto provider for rustls
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     // Parse command line arguments
     let args = Args::parse();
 

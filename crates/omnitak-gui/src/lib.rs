@@ -20,7 +20,7 @@ pub mod backend;
 use backend::{BackendCommand, BackendEvent, BackendService};
 
 pub mod api_client;
-pub use api_client::{ApiClient, ConnectionInfo, CreateConnectionRequest};
+pub use api_client::{ApiClient, ConnectionInfo, ConnectionType, CreateConnectionRequest};
 
 pub mod config_io;
 pub use config_io::{export_config, import_config, ConfigFile};
@@ -189,6 +189,9 @@ pub struct UiState {
 
     /// Plugin panel state
     pub plugin_panel: ui::plugins::PluginPanelState,
+
+    /// Map panel state
+    pub map_panel: ui::map::MapPanelState,
 }
 
 impl Default for UiState {
@@ -203,6 +206,7 @@ impl Default for UiState {
             message_details_dialog: None,
             expanded_messages: std::collections::HashSet::new(),
             plugin_panel: ui::plugins::PluginPanelState::default(),
+            map_panel: ui::map::MapPanelState::default(),
         }
     }
 }
@@ -227,6 +231,7 @@ pub enum Tab {
     Dashboard,
     Connections,
     Messages,
+    Map,
     Plugins,
     Settings,
 }
@@ -355,7 +360,7 @@ impl OmniTakApp {
     /// Creates a new OmniTAK GUI application.
     pub fn new(cc: &eframe::CreationContext<'_>, config_path: Option<PathBuf>) -> Self {
         // Load state from config file if provided, otherwise use storage
-        let mut state: AppState = if let Some(ref path) = config_path {
+        let state: AppState = if let Some(ref path) = config_path {
             // Try to load from config file using gui-servers.yaml format
             match import_config(path) {
                 Ok(config) => {
@@ -442,16 +447,18 @@ impl OmniTakApp {
             }
         };
 
-        let address = format!("{}:{}", config.host, config.port);
+        let connection_type = match config.protocol {
+            Protocol::Tcp => ConnectionType::TcpClient,
+            Protocol::Udp => ConnectionType::Udp,
+            Protocol::Tls => ConnectionType::TlsClient,
+            Protocol::WebSocket => ConnectionType::TcpClient, // WebSocket uses TCP
+        };
+
         let request = crate::api_client::CreateConnectionRequest {
             name: config.name.clone(),
-            address,
-            protocol: match config.protocol {
-                Protocol::Tcp => "tcp".to_string(),
-                Protocol::Udp => "udp".to_string(),
-                Protocol::Tls => "tls".to_string(),
-                Protocol::WebSocket => "websocket".to_string(),
-            },
+            connection_type,
+            address: config.host.clone(),
+            port: config.port,
             priority: None,
         };
 
@@ -758,13 +765,6 @@ impl OmniTakApp {
             state.connections.clear();
 
             for conn in connections {
-                // Parse host and port from address (format: "host:port")
-                let (host, port) = if let Some((h, p)) = conn.address.split_once(':') {
-                    (h.to_string(), p.parse::<u16>().unwrap_or(8089))
-                } else {
-                    (conn.address.clone(), 8089)
-                };
-
                 let metadata = ConnectionMetadata {
                     connection_id: ConnectionId::new(),
                     server_name: conn.name.clone(),
@@ -776,8 +776,8 @@ impl OmniTakApp {
                     connected_at: None,
                     disconnected_at: None,
                     reconnect_attempts: 0,
-                    messages_received: conn.messages_received.unwrap_or(0),
-                    messages_sent: conn.messages_sent.unwrap_or(0),
+                    messages_received: conn.messages_received,
+                    messages_sent: conn.messages_sent,
                     bytes_received: 0,
                     bytes_sent: 0,
                     last_error: None,
@@ -786,18 +786,17 @@ impl OmniTakApp {
 
                 // Also add to servers list if not already there
                 if !state.servers.iter().any(|s| s.name == conn.name) {
-                    let protocol = match conn.protocol.as_str() {
-                        "tcp" => Protocol::Tcp,
-                        "udp" => Protocol::Udp,
-                        "tls" => Protocol::Tls,
-                        "websocket" => Protocol::WebSocket,
-                        _ => Protocol::Tcp,
+                    let protocol = match conn.connection_type {
+                        ConnectionType::TcpClient | ConnectionType::TcpServer => Protocol::Tcp,
+                        ConnectionType::Udp => Protocol::Udp,
+                        ConnectionType::TlsClient | ConnectionType::TlsServer => Protocol::Tls,
+                        ConnectionType::Multicast => Protocol::Udp,
                     };
 
                     let server_config = ServerConfig {
                         name: conn.name.clone(),
-                        host,
-                        port,
+                        host: conn.address.clone(),
+                        port: conn.port,
                         protocol,
                         tls: None,
                         reconnect: omnitak_core::types::ReconnectConfig::default(),
@@ -862,6 +861,13 @@ impl eframe::App for OmniTakApp {
                 }
 
                 if ui
+                    .selectable_label(self.ui_state.selected_tab == Tab::Map, "🗺 Map")
+                    .clicked()
+                {
+                    self.ui_state.selected_tab = Tab::Map;
+                }
+
+                if ui
                     .selectable_label(self.ui_state.selected_tab == Tab::Plugins, "🔌 Plugins")
                     .clicked()
                 {
@@ -882,6 +888,7 @@ impl eframe::App for OmniTakApp {
             Tab::Dashboard => ui::dashboard::show(ui, &self.state),
             Tab::Connections => ui::connections::show(ui, self),
             Tab::Messages => ui::messages::show(ui, &self.state, &mut self.ui_state),
+            Tab::Map => ui::map::show(ui, &self.state, &mut self.ui_state.map_panel),
             Tab::Plugins => {
                 if let Some((message, level)) = ui::plugins::render_plugins_panel(
                     ui,

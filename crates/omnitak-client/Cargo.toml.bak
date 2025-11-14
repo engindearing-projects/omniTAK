@@ -1,0 +1,49 @@
+[package]
+name = "omnitak-client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Core dependencies
+omnitak-core = { path = "../omnitak-core" }
+omnitak-cert = { path = "../omnitak-cert" }
+
+# Async runtime and utilities
+tokio = { version = "1.42", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+
+# TLS support
+tokio-rustls = "0.26"
+rustls = { version = "0.23", features = ["std", "ring"] }
+rustls-pemfile = "2.2"
+webpki-roots = "0.26"
+
+# WebSocket support
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+futures-util = "0.3"
+http = "1.0"
+
+# Protocol and data handling
+bytes = "1.8"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Logging and tracing
+tracing = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+
+# Async trait support
+async-trait = "0.1"
+
+# Time utilities
+tokio-stream = "0.1"
+
+# Synchronization primitives
+parking_lot = "0.12"
+
+# Socket configuration
+socket2 = "0.5"

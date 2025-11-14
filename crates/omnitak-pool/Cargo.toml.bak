@@ -1,0 +1,33 @@
+[package]
+name = "omnitak-pool"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.40", features = ["full"] }
+dashmap = "6.1"
+flume = "0.11"
+metrics = "0.23"
+metrics-exporter-prometheus = "0.15"
+parking_lot = "0.12"
+tracing = "0.1"
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+async-trait = "0.1"
+futures = "0.3"
+arc-swap = "1.7"
+hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
+
+omnitak-core = { path = "../omnitak-core" }
+omnitak-client = { path = "../omnitak-client" }
+omnitak-filter = { path = "../omnitak-filter" }
+omnitak-cot = { path = "../omnitak-cot" }
+
+[dev-dependencies]
+tracing-subscriber = "0.3"
+axum = { version = "0.8", features = ["macros"] }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+serde_json = "1.0"
+tokio-stream = "0.1"
+omnitak-cert = { path = "../omnitak-cert" }

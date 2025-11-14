@@ -1,0 +1,49 @@
+[package]
+name = "omnitak-discovery"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Core dependencies
+omnitak-core = { path = "../omnitak-core" }
+
+# Async runtime
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+
+# mDNS library for service discovery
+mdns-sd = "0.11"
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Concurrency
+dashmap = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# UUID generation
+uuid = { workspace = true }
+
+# Async channels
+async-channel = { workspace = true }
+
+# System information
+hostname = "0.4"
+
+# OpenAPI documentation
+utoipa = "5.4"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
