@@ -74,74 +74,88 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
             ui.add_space(10.0);
 
             ui.horizontal(|ui| {
-                if ui.button("📤 Export to YAML").clicked() {
-                    match app.export_config("omnitak_config.yaml") {
-                        Ok(()) => {
-                            app.show_status(
-                                "Configuration exported to omnitak_config.yaml".to_string(),
-                                crate::StatusLevel::Success,
-                                5,
-                            );
+                // Handle ongoing export promise
+                if let Some(promise) = &app.ui_state.export_promise {
+                    if let Some(result) = promise.ready() {
+                        if let Some(path) = result {
+                            let state = app.state.lock().unwrap();
+                            let config = crate::ConfigFile::new(state.servers.clone());
+                            drop(state); // Release lock before I/O
+
+                            match crate::export_config(&config, path.as_path()) {
+                                Ok(()) => {
+                                    app.show_status(
+                                        format!("Configuration exported to {}", path.display()),
+                                        crate::StatusLevel::Success,
+                                        5,
+                                    );
+                                }
+                                Err(e) => {
+                                    app.show_status(
+                                        format!("Export failed: {}", e),
+                                        crate::StatusLevel::Error,
+                                        10,
+                                    );
+                                }
+                            }
                         }
-                        Err(e) => {
-                            app.show_status(
-                                format!("Export failed: {}", e),
-                                crate::StatusLevel::Error,
-                                10,
-                            );
-                        }
+                        app.ui_state.export_promise = None;
                     }
                 }
 
-                if ui.button("📤 Export to JSON").clicked() {
-                    match app.export_config("omnitak_config.json") {
-                        Ok(()) => {
-                            app.show_status(
-                                "Configuration exported to omnitak_config.json".to_string(),
-                                crate::StatusLevel::Success,
-                                5,
-                            );
-                        }
-                        Err(e) => {
-                            app.show_status(
-                                format!("Export failed: {}", e),
-                                crate::StatusLevel::Error,
-                                10,
-                            );
-                        }
-                    }
+                if ui.button("📤 Export Configuration").clicked() && app.ui_state.export_promise.is_none() {
+                    let promise = poll_promise::Promise::spawn_thread("export_dialog", || {
+                        rfd::FileDialog::new()
+                            .add_filter("YAML", &["yaml", "yml"])
+                            .add_filter("JSON", &["json"])
+                            .set_file_name("omnitak_config.yaml")
+                            .save_file()
+                    });
+                    app.ui_state.export_promise = Some(promise);
                 }
             });
 
             ui.add_space(10.0);
 
             ui.horizontal(|ui| {
-                if ui.button("📥 Import from File").clicked() {
-                    // TODO: Add file picker dialog
-                    app.show_status(
-                        "File picker not yet implemented. Place config file as 'import_config.yaml' in current directory".to_string(),
-                        crate::StatusLevel::Info,
-                        5,
-                    );
+                // Handle ongoing import promise
+                if let Some(promise) = &app.ui_state.import_promise {
+                    if let Some(result) = promise.ready() {
+                        if let Some(path) = result {
+                            match crate::import_config(&path) {
+                                Ok(config) => {
+                                    let mut state = app.state.lock().unwrap();
+                                    let count = config.servers.len();
+                                    state.servers.extend(config.servers);
+                                    drop(state); // Release lock
+
+                                    app.show_status(
+                                        format!("Imported {} server(s) from {}", count, path.display()),
+                                        crate::StatusLevel::Success,
+                                        5,
+                                    );
+                                }
+                                Err(e) => {
+                                    app.show_status(
+                                        format!("Import failed: {}", e),
+                                        crate::StatusLevel::Error,
+                                        10,
+                                    );
+                                }
+                            }
+                        }
+                        app.ui_state.import_promise = None;
+                    }
                 }
 
-                if ui.button("🔄 Import from import_config.yaml").clicked() {
-                    match app.import_config("import_config.yaml") {
-                        Ok(count) => {
-                            app.show_status(
-                                format!("Imported {} server(s) from import_config.yaml", count),
-                                crate::StatusLevel::Success,
-                                5,
-                            );
-                        }
-                        Err(e) => {
-                            app.show_status(
-                                format!("Import failed: {}", e),
-                                crate::StatusLevel::Error,
-                                10,
-                            );
-                        }
-                    }
+                if ui.button("📥 Import Configuration").clicked() && app.ui_state.import_promise.is_none() {
+                    let promise = poll_promise::Promise::spawn_thread("import_dialog", || {
+                        rfd::FileDialog::new()
+                            .add_filter("YAML", &["yaml", "yml"])
+                            .add_filter("JSON", &["json"])
+                            .pick_file()
+                    });
+                    app.ui_state.import_promise = Some(promise);
                 }
             });
 
@@ -151,25 +165,69 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
 
     ui.add_space(20.0);
 
-    // Future settings
-    ui.label(
-        egui::RichText::new("Additional settings will be added in future releases")
-            .color(egui::Color32::GRAY),
-    );
-    ui.add_space(10.0);
+    // Application Settings
+    egui::Frame::none()
+        .fill(egui::Color32::from_gray(35))
+        .rounding(5.0)
+        .inner_margin(15.0)
+        .show(ui, |ui| {
+            ui.heading("Application Settings");
+            ui.add_space(10.0);
 
-    ui.horizontal(|ui| {
-        ui.label("• Auto-start connections on launch");
-        ui.label(egui::RichText::new("(Coming soon)").color(egui::Color32::YELLOW));
-    });
+            let mut settings_changed = false;
 
-    ui.horizontal(|ui| {
-        ui.label("• Message retention policy");
-        ui.label(egui::RichText::new("(Coming soon)").color(egui::Color32::YELLOW));
-    });
+            // Auto-start connections
+            ui.horizontal(|ui| {
+                let mut auto_start = {
+                    let state = app.state.lock().unwrap();
+                    state.settings.auto_start_connections
+                };
 
-    ui.horizontal(|ui| {
-        ui.label("• File picker for import/export");
-        ui.label(egui::RichText::new("(Coming soon)").color(egui::Color32::YELLOW));
-    });
+                if ui.checkbox(&mut auto_start, "Auto-start connections on launch").changed() {
+                    let mut state = app.state.lock().unwrap();
+                    state.settings.auto_start_connections = auto_start;
+                    settings_changed = true;
+                }
+
+                ui.label(egui::RichText::new("ℹ").color(egui::Color32::LIGHT_BLUE))
+                    .on_hover_text("Automatically connect to all enabled servers when the application starts");
+            });
+
+            ui.add_space(10.0);
+
+            // Message retention policy
+            ui.horizontal(|ui| {
+                ui.label("Message log retention:");
+
+                let mut max_messages = {
+                    let state = app.state.lock().unwrap();
+                    state.settings.max_message_log_size
+                };
+
+                let mut temp_value = max_messages.to_string();
+                if ui.add(egui::TextEdit::singleline(&mut temp_value).desired_width(100.0)).changed() {
+                    if let Ok(value) = temp_value.parse::<usize>() {
+                        if value >= 100 && value <= 100000 {
+                            let mut state = app.state.lock().unwrap();
+                            state.settings.max_message_log_size = value;
+                            settings_changed = true;
+                        }
+                    }
+                }
+
+                ui.label("messages");
+                ui.label(egui::RichText::new("ℹ").color(egui::Color32::LIGHT_BLUE))
+                    .on_hover_text("Maximum number of messages to keep in the log (100-100000)");
+            });
+
+            if settings_changed {
+                app.show_status(
+                    "Settings updated".to_string(),
+                    crate::StatusLevel::Success,
+                    3,
+                );
+            }
+        });
+
+    ui.add_space(20.0);
 }

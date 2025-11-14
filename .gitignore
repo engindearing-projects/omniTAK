@@ -42,3 +42,4 @@ demo_server/target/
 examples/
 __pycache__/
 *.pyc
+gui-servers.yaml

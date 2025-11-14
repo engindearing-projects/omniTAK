@@ -2,19 +2,323 @@
 
 use crate::{format_bytes, OmniTakApp, ServerDialogState};
 use eframe::egui;
-use omnitak_core::types::ServerStatus;
+use omnitak_core::types::{Protocol, ServerStatus};
+use std::path::PathBuf;
+
+/// Result of certificate scanning
+#[derive(Debug)]
+struct CertificateScanResult {
+    ca_path: Option<String>,
+    client_cert_path: Option<String>,
+    client_key_path: Option<String>,
+}
+
+/// Scans common locations for TAK certificates
+fn scan_for_certificates() -> Option<CertificateScanResult> {
+    let common_paths = vec![
+        "./certs",
+        "/Users/iesouskurios/omniTAK/certs",
+        "~/Downloads",
+        ".",
+    ];
+
+    let mut ca_path: Option<String> = None;
+    let mut client_cert_path: Option<String> = None;
+    let mut client_key_path: Option<String> = None;
+
+    for base_path in common_paths {
+        let expanded_path = if base_path.starts_with("~/") {
+            if let Some(home) = std::env::var_os("HOME") {
+                PathBuf::from(home).join(&base_path[2..])
+            } else {
+                continue;
+            }
+        } else {
+            PathBuf::from(base_path)
+        };
+
+        if !expanded_path.exists() {
+            continue;
+        }
+
+        // Look for CA certificate
+        if ca_path.is_none() {
+            for ca_name in &["ca.pem", "ca.crt", "ca-cert.pem", "truststore.pem", "ca.p12"] {
+                let path = expanded_path.join(ca_name);
+                if path.exists() {
+                    ca_path = Some(path.to_string_lossy().to_string());
+                    break;
+                }
+            }
+        }
+
+        // Look for client certificate
+        if client_cert_path.is_none() {
+            for cert_name in &[
+                "admin.pem",
+                "client.pem",
+                "omnitak-desktop.pem",
+                "client-cert.pem",
+                "admin.p12",
+                "client.p12",
+            ] {
+                let path = expanded_path.join(cert_name);
+                if path.exists() {
+                    client_cert_path = Some(path.to_string_lossy().to_string());
+                    break;
+                }
+            }
+        }
+
+        // Look for client key
+        if client_key_path.is_none() {
+            for key_name in &[
+                "admin-key.pem",
+                "client-key.pem",
+                "omnitak-desktop.key",
+                "client.key",
+                "admin.p12",
+                "client.p12",
+            ] {
+                let path = expanded_path.join(key_name);
+                if path.exists() {
+                    client_key_path = Some(path.to_string_lossy().to_string());
+                    break;
+                }
+            }
+        }
+    }
+
+    // Only return result if we found at least one certificate
+    if ca_path.is_some() || client_cert_path.is_some() || client_key_path.is_some() {
+        Some(CertificateScanResult {
+            ca_path,
+            client_cert_path,
+            client_key_path,
+        })
+    } else {
+        None
+    }
+}
 
 /// Shows the connections view.
 pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
-    ui.heading("Server Connections");
+    ui.horizontal(|ui| {
+        ui.heading("Server Connections");
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.button("🔄 Refresh").clicked() {
+                app.refresh_from_api();
+                app.show_status("Connections refreshed".to_string(), crate::StatusLevel::Success, 2);
+            }
+        });
+    });
     ui.add_space(10.0);
 
-    // Add server button
-    if ui.button("➕ Add Server").clicked() {
-        app.ui_state.server_dialog = Some(ServerDialogState::new());
+    // Handle certificate file picker promises
+    if let Some(promise) = &app.ui_state.cert_ca_promise {
+        if let Some(result) = promise.ready() {
+            if let Some(path) = result {
+                if let Some(dialog_state) = &mut app.ui_state.inline_server_form {
+                    dialog_state.ca_cert_path = path.to_string_lossy().to_string();
+                }
+            }
+            app.ui_state.cert_ca_promise = None;
+        }
     }
 
-    ui.add_space(10.0);
+    if let Some(promise) = &app.ui_state.cert_client_promise {
+        if let Some(result) = promise.ready() {
+            if let Some(path) = result {
+                if let Some(dialog_state) = &mut app.ui_state.inline_server_form {
+                    dialog_state.client_cert_path = path.to_string_lossy().to_string();
+                }
+            }
+            app.ui_state.cert_client_promise = None;
+        }
+    }
+
+    if let Some(promise) = &app.ui_state.cert_key_promise {
+        if let Some(result) = promise.ready() {
+            if let Some(path) = result {
+                if let Some(dialog_state) = &mut app.ui_state.inline_server_form {
+                    dialog_state.client_key_path = path.to_string_lossy().to_string();
+                }
+            }
+            app.ui_state.cert_key_promise = None;
+        }
+    }
+
+    // Inline Add/Edit Form
+    let mut form_closed = false;
+    let mut form_saved = false;
+
+    if let Some(dialog_state) = &mut app.ui_state.inline_server_form {
+        egui::CollapsingHeader::new(if dialog_state.editing_index.is_some() {
+            "✏ Edit Server"
+        } else {
+            "➕ Add New Server"
+        })
+        .default_open(true)
+        .show(ui, |ui| {
+            egui::Frame::none()
+                .fill(egui::Color32::from_gray(40))
+                .corner_radius(5.0)
+                .inner_margin(15.0)
+                .show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        // Server Name
+                        ui.horizontal(|ui| {
+                            ui.label("Server Name:");
+                            ui.text_edit_singleline(&mut dialog_state.config.name);
+                        });
+                        ui.add_space(5.0);
+
+                        // Host and Port
+                        ui.horizontal(|ui| {
+                            ui.label("Host:");
+                            ui.add(egui::TextEdit::singleline(&mut dialog_state.config.host).desired_width(200.0));
+                            ui.add_space(10.0);
+                            ui.label("Port:");
+                            let mut port_str = dialog_state.config.port.to_string();
+                            if ui.add(egui::TextEdit::singleline(&mut port_str).desired_width(80.0)).changed() {
+                                if let Ok(port) = port_str.parse::<u16>() {
+                                    dialog_state.config.port = port;
+                                }
+                            }
+                        });
+                        ui.add_space(5.0);
+
+                        // Protocol
+                        ui.horizontal(|ui| {
+                            ui.label("Protocol:");
+                            egui::ComboBox::from_id_salt("protocol_combo")
+                                .selected_text(format!("{}", dialog_state.config.protocol))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut dialog_state.config.protocol, Protocol::Tcp, "TCP");
+                                    ui.selectable_value(&mut dialog_state.config.protocol, Protocol::Udp, "UDP");
+                                    ui.selectable_value(&mut dialog_state.config.protocol, Protocol::Tls, "TLS");
+                                    ui.selectable_value(&mut dialog_state.config.protocol, Protocol::WebSocket, "WebSocket");
+                                });
+                        });
+                        ui.add_space(5.0);
+
+                        // TLS Configuration (if TLS protocol selected)
+                        if dialog_state.config.protocol == Protocol::Tls {
+                            ui.separator();
+                            ui.label(egui::RichText::new("TLS Configuration").strong());
+                            ui.add_space(5.0);
+
+                            ui.checkbox(&mut dialog_state.tls_enabled, "Enable TLS");
+
+                            if dialog_state.tls_enabled {
+                                // Auto-detect button
+                                if ui.button("🔍 Auto-detect Certificates").clicked() {
+                                    if let Some(certs) = scan_for_certificates() {
+                                        dialog_state.ca_cert_path = certs.ca_path.unwrap_or_default();
+                                        dialog_state.client_cert_path = certs.client_cert_path.unwrap_or_default();
+                                        dialog_state.client_key_path = certs.client_key_path.unwrap_or_default();
+                                    }
+                                }
+                                ui.add_space(5.0);
+
+                                ui.horizontal(|ui| {
+                                    ui.label("CA Certificate:");
+                                    ui.text_edit_singleline(&mut dialog_state.ca_cert_path);
+                                    if ui.button("📁").clicked() && app.ui_state.cert_ca_promise.is_none() {
+                                        let promise = poll_promise::Promise::spawn_thread("ca_cert_dialog", || {
+                                            rfd::FileDialog::new()
+                                                .add_filter("Certificate Files", &["pem", "crt", "cer", "p12", "pfx"])
+                                                .add_filter("All Files", &["*"])
+                                                .pick_file()
+                                        });
+                                        app.ui_state.cert_ca_promise = Some(promise);
+                                    }
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Client Certificate:");
+                                    ui.text_edit_singleline(&mut dialog_state.client_cert_path);
+                                    if ui.button("📁").clicked() && app.ui_state.cert_client_promise.is_none() {
+                                        let promise = poll_promise::Promise::spawn_thread("client_cert_dialog", || {
+                                            rfd::FileDialog::new()
+                                                .add_filter("Certificate Files", &["pem", "crt", "cer", "p12", "pfx"])
+                                                .add_filter("All Files", &["*"])
+                                                .pick_file()
+                                        });
+                                        app.ui_state.cert_client_promise = Some(promise);
+                                    }
+                                });
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Client Key:");
+                                    ui.text_edit_singleline(&mut dialog_state.client_key_path);
+                                    if ui.button("📁").clicked() && app.ui_state.cert_key_promise.is_none() {
+                                        let promise = poll_promise::Promise::spawn_thread("client_key_dialog", || {
+                                            rfd::FileDialog::new()
+                                                .add_filter("Key Files", &["pem", "key", "p12", "pfx"])
+                                                .add_filter("All Files", &["*"])
+                                                .pick_file()
+                                        });
+                                        app.ui_state.cert_key_promise = Some(promise);
+                                    }
+                                });
+
+                                ui.checkbox(&mut dialog_state.verify_cert, "Verify Server Certificate");
+
+                                ui.horizontal(|ui| {
+                                    ui.label("Server Name (optional):");
+                                    ui.text_edit_singleline(&mut dialog_state.server_name);
+                                });
+                            }
+                        }
+
+                        ui.add_space(10.0);
+
+                        // Enabled checkbox
+                        ui.checkbox(&mut dialog_state.config.enabled, "Enable auto-connect");
+
+                        ui.add_space(15.0);
+
+                        // Action buttons
+                        ui.horizontal(|ui| {
+                            if ui.button("💾 Save").clicked() {
+                                form_saved = true;
+                            }
+
+                            if ui.button("✖ Cancel").clicked() {
+                                form_closed = true;
+                            }
+                        });
+                    });
+                });
+        });
+        ui.add_space(10.0);
+    } else {
+        // Add server button (only show when form is closed)
+        if ui.button("➕ Add Server").clicked() {
+            app.ui_state.inline_server_form = Some(ServerDialogState::new());
+        }
+        ui.add_space(10.0);
+    }
+
+    // Handle form actions
+    if form_saved {
+        if let Some(dialog_state) = &app.ui_state.inline_server_form {
+            let config = dialog_state.build();
+            if let Some(idx) = dialog_state.editing_index {
+                app.update_server(idx, config);
+                app.show_status("Server updated".to_string(), crate::StatusLevel::Success, 3);
+            } else {
+                app.add_server(config);
+                app.show_status("Server added".to_string(), crate::StatusLevel::Success, 3);
+            }
+        }
+        app.ui_state.inline_server_form = None;
+    }
+
+    if form_closed {
+        app.ui_state.inline_server_form = None;
+    }
 
     // Server list
     let state = app.state.lock().unwrap();
@@ -44,7 +348,7 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
         for (idx, server) in servers_clone.iter().enumerate() {
             egui::Frame::none()
                 .fill(egui::Color32::from_gray(35))
-                .rounding(5.0)
+                .corner_radius(5.0)
                 .inner_margin(15.0)
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
@@ -189,7 +493,7 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
             state.servers.get(idx).cloned()
         };
         if let Some(server) = server_opt {
-            app.ui_state.server_dialog = Some(ServerDialogState::edit(idx, server));
+            app.ui_state.inline_server_form = Some(ServerDialogState::edit(idx, server));
         }
     }
 

@@ -1,16 +1,24 @@
 //! Dashboard view showing system overview and metrics.
 
-use crate::{format_bytes, format_duration, AppState};
+use crate::{format_bytes, format_duration, AppState, OmniTakApp};
 use eframe::egui;
 use omnitak_core::types::ServerStatus;
 use std::sync::{Arc, Mutex};
 
 /// Shows the dashboard view.
-pub fn show(ui: &mut egui::Ui, state: &Arc<Mutex<AppState>>) {
-    let state = state.lock().unwrap();
-
-    ui.heading("System Dashboard");
+pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
+    ui.horizontal(|ui| {
+        ui.heading("System Dashboard");
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.button("🔄 Refresh").clicked() {
+                app.refresh_from_api();
+                app.show_status("Dashboard refreshed".to_string(), crate::StatusLevel::Success, 2);
+            }
+        });
+    });
     ui.add_space(10.0);
+
+    let state = app.state.lock().unwrap();
 
     // Metrics cards
     ui.horizontal(|ui| {

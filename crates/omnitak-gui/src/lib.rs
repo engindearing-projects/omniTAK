@@ -56,6 +56,9 @@ pub struct OmniTakApp {
 
     /// Last refresh timestamp
     pub last_refresh: std::time::Instant,
+
+    /// Flag to track if auto-start has been performed
+    pub auto_start_done: bool,
 }
 
 /// Status message level
@@ -82,12 +85,13 @@ impl Default for OmniTakApp {
             status_message: None,
             status_message_expiry: None,
             last_refresh: std::time::Instant::now(),
+            auto_start_done: false,
         }
     }
 }
 
 /// Application state (shared between UI and backend).
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct AppState {
     /// Server configurations
     pub servers: Vec<ServerConfig>,
@@ -100,6 +104,40 @@ pub struct AppState {
 
     /// Application metrics
     pub metrics: AppMetrics,
+
+    /// Application settings
+    pub settings: AppSettings,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            servers: Vec::new(),
+            connections: HashMap::new(),
+            message_log: Vec::new(),
+            metrics: AppMetrics::default(),
+            settings: AppSettings::default(),
+        }
+    }
+}
+
+/// Application settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppSettings {
+    /// Auto-start connections on launch
+    pub auto_start_connections: bool,
+
+    /// Maximum number of messages to retain
+    pub max_message_log_size: usize,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            auto_start_connections: false,
+            max_message_log_size: 1000,
+        }
+    }
 }
 
 /// Application metrics.
@@ -192,6 +230,20 @@ pub struct UiState {
 
     /// Map panel state
     pub map_panel: ui::map::MapPanelState,
+
+    /// File dialog promise for export
+    pub export_promise: Option<poll_promise::Promise<Option<std::path::PathBuf>>>,
+
+    /// File dialog promise for import
+    pub import_promise: Option<poll_promise::Promise<Option<std::path::PathBuf>>>,
+
+    /// Inline server form state (replaces modal dialog)
+    pub inline_server_form: Option<ServerDialogState>,
+
+    /// Certificate file picker promises
+    pub cert_ca_promise: Option<poll_promise::Promise<Option<std::path::PathBuf>>>,
+    pub cert_client_promise: Option<poll_promise::Promise<Option<std::path::PathBuf>>>,
+    pub cert_key_promise: Option<poll_promise::Promise<Option<std::path::PathBuf>>>,
 }
 
 impl Default for UiState {
@@ -207,6 +259,12 @@ impl Default for UiState {
             expanded_messages: std::collections::HashSet::new(),
             plugin_panel: ui::plugins::PluginPanelState::default(),
             map_panel: ui::map::MapPanelState::default(),
+            export_promise: None,
+            import_promise: None,
+            inline_server_form: None,
+            cert_ca_promise: None,
+            cert_client_promise: None,
+            cert_key_promise: None,
         }
     }
 }
@@ -411,6 +469,41 @@ impl OmniTakApp {
             status_message: None,
             status_message_expiry: None,
             last_refresh: std::time::Instant::now(),
+            auto_start_done: false,
+        }
+    }
+
+    /// Auto-starts connections if enabled
+    fn auto_start_connections(&mut self) {
+        let should_auto_start = {
+            let state = self.state.lock().unwrap();
+            state.settings.auto_start_connections
+        };
+
+        if !should_auto_start {
+            return;
+        }
+
+        let servers = {
+            let state = self.state.lock().unwrap();
+            state.servers.clone()
+        };
+
+        let enabled_servers: Vec<_> = servers.iter().filter(|s| s.enabled).cloned().collect();
+
+        if enabled_servers.is_empty() {
+            return;
+        }
+
+        tracing::info!("Auto-starting {} connection(s)", enabled_servers.len());
+        self.show_status(
+            format!("Auto-starting {} connection(s)...", enabled_servers.len()),
+            StatusLevel::Info,
+            3,
+        );
+
+        for server in enabled_servers {
+            self.connect_server(server);
         }
     }
 
@@ -607,10 +700,11 @@ impl OmniTakApp {
         let mut state = self.state.lock().unwrap();
         state.message_log.push(log);
 
-        // Keep only last 1000 messages
+        // Keep only last N messages based on retention policy
+        let max_size = state.settings.max_message_log_size;
         let len = state.message_log.len();
-        if len > 1000 {
-            state.message_log.drain(0..len - 1000);
+        if len > max_size {
+            state.message_log.drain(0..len - max_size);
         }
     }
 
@@ -743,7 +837,7 @@ impl OmniTakApp {
     }
 
     /// Refreshes data from the API
-    fn refresh_from_api(&mut self) {
+    pub fn refresh_from_api(&mut self) {
         let api_client = match &self.api_client {
             Some(client) => client,
             None => return,
@@ -823,6 +917,12 @@ impl eframe::App for OmniTakApp {
             return;
         }
 
+        // Auto-start connections on first update after authentication
+        if !self.auto_start_done {
+            self.auto_start_connections();
+            self.auto_start_done = true;
+        }
+
         // Refresh data from API every 5 seconds
         if self.last_refresh.elapsed() > Duration::from_secs(5) {
             self.refresh_from_api();
@@ -885,7 +985,7 @@ impl eframe::App for OmniTakApp {
 
         // Main content
         egui::CentralPanel::default().show(ctx, |ui| match self.ui_state.selected_tab {
-            Tab::Dashboard => ui::dashboard::show(ui, &self.state),
+            Tab::Dashboard => ui::dashboard::show(ui, self),
             Tab::Connections => ui::connections::show(ui, self),
             Tab::Messages => ui::messages::show(ui, &self.state, &mut self.ui_state),
             Tab::Map => ui::map::show(ui, &self.state, &mut self.ui_state.map_panel),
@@ -915,11 +1015,6 @@ impl eframe::App for OmniTakApp {
                     ui.label(message);
                 });
             });
-        }
-
-        // Server dialog (modal)
-        if self.ui_state.server_dialog.is_some() {
-            ui::server_dialog::show(ctx, self);
         }
 
         // Request repaint for real-time updates
