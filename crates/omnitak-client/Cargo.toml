@@ -14,7 +14,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 
 # TLS support
 tokio-rustls = "0.26"
-rustls = { version = "0.23", features = ["std"] }
+rustls = { version = "0.23", features = ["std", "ring"] }
 rustls-pemfile = "2.2"
 webpki-roots = "0.26"
 

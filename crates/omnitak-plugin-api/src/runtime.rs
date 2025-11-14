@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use wasmtime::*;
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 
@@ -76,41 +75,37 @@ impl PluginRuntime {
 
     /// Create WASI context based on sandbox policy
     fn create_wasi_context(&self) -> WasiCtx {
-        let mut builder = WasiCtxBuilder::new();
+        let builder = &mut WasiCtxBuilder::new();
 
         // Configure based on sandbox policy
         if self.sandbox_policy.allow_env_vars {
-            builder = builder.inherit_env();
+            builder.inherit_env();
         }
 
         if self.sandbox_policy.allow_network {
-            builder = builder.inherit_network();
+            builder.inherit_network();
         }
 
         // Add allowed filesystem paths
         for path in &self.sandbox_policy.allowed_paths {
-            if self.sandbox_policy.allow_filesystem_write {
-                // Read-write access
-                builder = builder.preopened_dir(
-                    wasmtime_wasi::Dir::open_ambient_dir(path, wasmtime_wasi::ambient_authority())
-                        .unwrap_or_else(|_| {
-                            tracing::warn!("Failed to open directory for plugin: {}", path);
-                            wasmtime_wasi::Dir::open_ambient_dir(".", wasmtime_wasi::ambient_authority())
-                                .unwrap()
-                        }),
-                    path,
-                );
-            } else if self.sandbox_policy.allow_filesystem_read {
-                // Read-only access
-                builder = builder.preopened_dir(
-                    wasmtime_wasi::Dir::open_ambient_dir(path, wasmtime_wasi::ambient_authority())
-                        .unwrap_or_else(|_| {
-                            tracing::warn!("Failed to open directory for plugin: {}", path);
-                            wasmtime_wasi::Dir::open_ambient_dir(".", wasmtime_wasi::ambient_authority())
-                                .unwrap()
-                        }),
-                    path,
-                );
+            if self.sandbox_policy.allow_filesystem_write || self.sandbox_policy.allow_filesystem_read {
+                // Determine permissions based on policy
+                let (dir_perms, file_perms) = if self.sandbox_policy.allow_filesystem_write {
+                    (
+                        wasmtime_wasi::DirPerms::all(),
+                        wasmtime_wasi::FilePerms::all(),
+                    )
+                } else {
+                    (
+                        wasmtime_wasi::DirPerms::READ,
+                        wasmtime_wasi::FilePerms::READ,
+                    )
+                };
+
+                // Add preopened directory with specified permissions
+                if let Err(e) = builder.preopened_dir(path, path, dir_perms, file_perms) {
+                    tracing::warn!("Failed to add preopened directory {}: {}", path, e);
+                }
             }
         }
 
@@ -118,13 +113,13 @@ impl PluginRuntime {
     }
 
     /// Load and compile a plugin from bytes
-    pub fn load_plugin(&self, wasm_bytes: &[u8]) -> PluginResult<Component> {
-        Component::from_binary(&self.engine, wasm_bytes)
+    pub fn load_plugin(&self, wasm_bytes: &[u8]) -> PluginResult<wasmtime::component::Component> {
+        wasmtime::component::Component::from_binary(&self.engine, wasm_bytes)
             .map_err(|e| PluginError::LoadError(e.to_string()))
     }
 
     /// Load and compile a plugin from file
-    pub fn load_plugin_from_file(&self, path: &str) -> PluginResult<Component> {
+    pub fn load_plugin_from_file(&self, path: &str) -> PluginResult<wasmtime::component::Component> {
         let wasm_bytes = std::fs::read(path)?;
         self.load_plugin(&wasm_bytes)
     }
@@ -156,7 +151,7 @@ impl WasiView for PluginState {
 impl wasmtime::ResourceLimiter for ResourceLimits {
     fn memory_growing(
         &mut self,
-        current: usize,
+        _current: usize,
         desired: usize,
         _maximum: Option<usize>,
     ) -> anyhow::Result<bool> {
@@ -169,9 +164,9 @@ impl wasmtime::ResourceLimiter for ResourceLimits {
 
     fn table_growing(
         &mut self,
-        _current: u32,
-        desired: u32,
-        _maximum: Option<u32>,
+        _current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
     ) -> anyhow::Result<bool> {
         // Allow reasonable table growth
         Ok(desired < 10000)

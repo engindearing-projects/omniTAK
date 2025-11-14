@@ -9,10 +9,12 @@ license.workspace = true
 # Core types
 omnitak-core = { path = "../omnitak-core" }
 omnitak-cot = { path = "../omnitak-cot" }
+omnitak-filter = { path = "../omnitak-filter" }
 
 # WASM runtime
 wasmtime = { version = "27", features = ["component-model", "async", "cranelift"] }
 wasmtime-wasi = "27"
+cap-std = "3.0"
 
 # Serialization
 serde = { workspace = true }
@@ -36,6 +38,12 @@ tracing = { workspace = true }
 # Security & hashing
 sha2 = "0.10"
 hex = "0.4"
+
+# Optional: OpenAPI support
+utoipa = { version = "5.3", optional = true }
+
+[features]
+openapi = ["utoipa"]
 
 [dev-dependencies]
 tokio-test = "0.4"

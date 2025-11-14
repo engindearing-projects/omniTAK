@@ -11,7 +11,7 @@ pub mod wasm_transformer;
 
 pub use error::{PluginError, PluginResult};
 pub use manager::{PluginManager, PluginManagerConfig};
-pub use metadata::{PluginCapability, PluginInfo, PluginMetadata};
+pub use metadata::{FilterMetadata, PluginCapability, PluginInfo, PluginMetadata, TransformerMetadata};
 pub use runtime::PluginRuntime;
 pub use security::{ResourceLimits, SandboxPolicy};
 pub use wasm_filter::WasmFilterPlugin;

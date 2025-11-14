@@ -40,7 +40,7 @@ prost-types = "0.13"
 bytes = "1.9"
 
 # TLS - memory-safe implementation
-rustls = { version = "0.23", features = ["std"] }
+rustls = { version = "0.23", features = ["std", "ring"] }
 rustls-pemfile = "2.2"
 tokio-rustls = "0.26"
 webpki-roots = "0.26"

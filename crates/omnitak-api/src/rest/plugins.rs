@@ -125,7 +125,7 @@ pub enum PluginStatus {
     Disabled,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, utoipa::IntoParams, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginQueryParams {
     #[serde(default)]

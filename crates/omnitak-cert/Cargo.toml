@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # TLS and certificate handling
-rustls = { version = "0.23", features = ["std"] }
+rustls = { version = "0.23", features = ["std", "ring"] }
 rustls-pemfile = "2.2"
 p12 = "0.6"  # PKCS#12 support
 

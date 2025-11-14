@@ -4251,10 +4251,12 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "cap-std",
  "dashmap",
  "hex",
  "omnitak-core",
  "omnitak-cot",
+ "omnitak-filter",
  "parking_lot 0.12.5",
  "serde",
  "serde_json",
@@ -4263,6 +4265,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tracing",
+ "utoipa",
  "wasmtime",
  "wasmtime-wasi",
 ]

@@ -59,7 +59,7 @@ use tokio::signal;
 use tokio::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use types::UserRole;
 use utoipa::OpenApi;
 
@@ -334,7 +334,18 @@ impl Server {
 
         // Initialize plugin manager
         info!("Initializing plugin manager");
-        let plugin_manager = Arc::new(RwLock::new(PluginManager::new()));
+        let plugin_manager = match PluginManager::new(omnitak_plugin_api::PluginManagerConfig::default()) {
+            Ok(manager) => Arc::new(RwLock::new(manager)),
+            Err(e) => {
+                warn!("Failed to initialize plugin manager: {}, plugins will be disabled", e);
+                // Create a minimal manager as a fallback
+                Arc::new(RwLock::new(PluginManager::new(omnitak_plugin_api::PluginManagerConfig {
+                    plugin_dir: "./plugins".to_string(),
+                    hot_reload: false,
+                    ..Default::default()
+                }).unwrap_or_else(|_| panic!("Critical: Could not initialize plugin manager"))))
+            }
+        };
         let plugin_state = rest::plugins::PluginApiState {
             plugin_manager,
             audit_logger: audit_logger.clone(),

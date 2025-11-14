@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 /// Plugin capability flags
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub enum PluginCapability {
     /// Can filter CoT messages
     Filter,
@@ -15,6 +19,7 @@ pub enum PluginCapability {
 
 /// Complete plugin information
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct PluginInfo {
     pub id: String,
     pub name: String,
@@ -28,6 +33,7 @@ pub struct PluginInfo {
 
 /// Plugin metadata (filter-specific)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct FilterMetadata {
     pub id: String,
     pub name: String,
@@ -40,6 +46,7 @@ pub struct FilterMetadata {
 
 /// Plugin metadata (transformer-specific)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct TransformerMetadata {
     pub id: String,
     pub name: String,

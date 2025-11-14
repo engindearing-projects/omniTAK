@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use std::time::Instant;
-use parking_lot::RwLock;
 use wasmtime::component::{Component, Instance, Linker};
 use wasmtime::Store;
 
@@ -16,13 +15,6 @@ pub struct WasmFilterPlugin {
     runtime: Arc<PluginRuntime>,
     component: Component,
     metadata: FilterMetadata,
-    instance_cache: RwLock<Option<CachedInstance>>,
-}
-
-struct CachedInstance {
-    store: Store<PluginState>,
-    instance: Instance,
-    created_at: Instant,
 }
 
 impl WasmFilterPlugin {
@@ -36,7 +28,6 @@ impl WasmFilterPlugin {
             runtime,
             component,
             metadata,
-            instance_cache: RwLock::new(None),
         }
     }
 
@@ -65,18 +56,9 @@ impl WasmFilterPlugin {
         &self.metadata
     }
 
-    /// Get or create instance (with caching for performance)
-    fn get_or_create_instance(&self) -> PluginResult<(Store<PluginState>, Instance)> {
-        // Check cache
-        {
-            let cache = self.instance_cache.read();
-            if let Some(cached) = cache.as_ref() {
-                // Cache is valid, but we can't return it directly due to &mut requirements
-                // In a real implementation, we'd use a pool of instances
-                drop(cache);
-            }
-        }
-
+    /// Create a new instance for each evaluation
+    /// Note: We create fresh instances instead of caching to maintain Sync compatibility
+    async fn create_instance(&self) -> PluginResult<(Store<PluginState>, Instance)> {
         // Create new instance
         let mut store = self.runtime.create_store();
         let mut linker = Linker::new(self.runtime.engine());
@@ -107,11 +89,11 @@ impl WasmFilterPlugin {
     }
 
     /// Evaluate filter (internal implementation)
-    async fn evaluate_async(&self, msg: &CotMessage<'_>) -> PluginResult<FilterResult> {
+    async fn evaluate_async(&self, _msg: &CotMessage<'_>) -> PluginResult<FilterResult> {
         let start = Instant::now();
 
-        // Get or create instance
-        let (mut store, instance) = self.get_or_create_instance()?;
+        // Create new instance for this evaluation
+        let (_store, _instance) = self.create_instance().await?;
 
         // TODO: Call the WASM function with msg data
         // This requires WIT bindings generation
@@ -133,6 +115,7 @@ impl FilterRule for WasmFilterPlugin {
         // Since FilterRule is sync but WASM is async, we need to block
         // In production, consider using a thread pool or async runtime
         tokio::runtime::Handle::try_current()
+            .ok()
             .and_then(|handle| {
                 handle.block_on(async { self.evaluate_async(msg).await.ok() })
             })
