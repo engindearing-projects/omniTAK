@@ -19,15 +19,15 @@ OmniTAK is a high-performance, memory-safe TAK (Team Awareness Kit) server aggre
 
 ### Interactive Map View
 
-![OmniTAK Map View](docs/screenshots/Screenshot%202025-11-13%20at%209.06.19%20PM.png)
+![OmniTAK Map View](docs/screenshots/map-view.png)
 *Interactive tactical map with real-time positioning and situational awareness*
 
 ### Dashboard & Monitoring
 
 <p align="center">
-  <img src="docs/screenshots/Screenshot%202025-11-13%20at%209.06.13%20PM.png" width="32%" alt="Dashboard">
-  <img src="docs/screenshots/Screenshot%202025-11-13%20at%209.06.04%20PM.png" width="32%" alt="Connections">
-  <img src="docs/screenshots/Screenshot%202025-11-13%20at%209.06.00%20PM.png" width="32%" alt="Messages">
+  <img src="docs/screenshots/dashboard.png" width="32%" alt="Dashboard">
+  <img src="docs/screenshots/connections.png" width="32%" alt="Connections">
+  <img src="docs/screenshots/messages.png" width="32%" alt="Messages">
 </p>
 
 *Real-time dashboard, server connections management, and message monitoring*
