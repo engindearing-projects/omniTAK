@@ -4,6 +4,7 @@ pub mod certificates;
 pub mod command_palette;
 pub mod connections;
 pub mod dashboard;
+pub mod datapackage;
 pub mod map;
 pub mod messages;
 pub mod offline_maps;

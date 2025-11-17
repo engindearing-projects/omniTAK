@@ -11,6 +11,7 @@ members = [
     "crates/omnitak-adb",
     "crates/omnitak-discovery",
     "crates/omnitak-plugin-api",
+    "crates/omnitak-datapackage",
 ]
 resolver = "2"
 

@@ -13,6 +13,7 @@ omnitak-api = { path = "../omnitak-api" }
 omnitak-cot = { path = "../omnitak-cot" }
 omnitak-plugin-api = { path = "../omnitak-plugin-api" }
 omnitak-cert = { path = "../omnitak-cert" }
+omnitak-datapackage = { path = "../omnitak-datapackage" }
 
 # GUI framework
 eframe = { workspace = true }

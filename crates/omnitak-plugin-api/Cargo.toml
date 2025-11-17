@@ -39,6 +39,12 @@ tracing = { workspace = true }
 sha2 = "0.10"
 hex = "0.4"
 
+# HTTP client for registry
+reqwest = { workspace = true }
+
+# Time handling
+chrono = { workspace = true }
+
 # Optional: OpenAPI support
 utoipa = { version = "5.3", optional = true }
 

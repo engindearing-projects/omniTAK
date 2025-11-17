@@ -4,6 +4,7 @@
 pub mod error;
 pub mod manager;
 pub mod metadata;
+pub mod registry;
 pub mod runtime;
 pub mod security;
 pub mod wasm_filter;
@@ -19,6 +20,7 @@ wasmtime::component::bindgen!({
 pub use error::{PluginError, PluginResult};
 pub use manager::{PluginManager, PluginManagerConfig};
 pub use metadata::{FilterMetadata, PluginCapability, PluginInfo, PluginMetadata, TransformerMetadata};
+pub use registry::{PluginCategory, RegistryClient, RegistryManifest, RegistryPlugin};
 pub use runtime::PluginRuntime;
 pub use security::{ResourceLimits, SandboxPolicy};
 pub use wasm_filter::WasmFilterPlugin;

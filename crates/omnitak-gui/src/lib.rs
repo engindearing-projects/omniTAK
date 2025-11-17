@@ -269,6 +269,9 @@ pub struct UiState {
 
     /// Certificate manager state
     pub certificate_manager: ui::certificates::CertificateManagerState,
+
+    /// Data Package panel state
+    pub datapackage_panel: ui::datapackage::DataPackagePanelState,
 }
 
 impl Default for UiState {
@@ -292,6 +295,7 @@ impl Default for UiState {
             cert_key_promise: None,
             quick_connect: None,
             certificate_manager: ui::certificates::CertificateManagerState::default(),
+            datapackage_panel: ui::datapackage::DataPackagePanelState::default(),
         }
     }
 }
@@ -318,6 +322,7 @@ pub enum Tab {
     Messages,
     Map,
     Plugins,
+    DataPackages,
     Settings,
 }
 
@@ -1025,6 +1030,16 @@ impl eframe::App for OmniTakApp {
                 }
 
                 if ui
+                    .selectable_label(
+                        self.ui_state.selected_tab == Tab::DataPackages,
+                        "📦 Packages",
+                    )
+                    .clicked()
+                {
+                    self.ui_state.selected_tab = Tab::DataPackages;
+                }
+
+                if ui
                     .selectable_label(self.ui_state.selected_tab == Tab::Settings, "⚙ Settings")
                     .clicked()
                 {
@@ -1054,6 +1069,15 @@ impl eframe::App for OmniTakApp {
                     &self.state,
                     &mut self.ui_state.plugin_panel,
                     self.api_client.as_ref(),
+                ) {
+                    self.show_status(message, level, 5);
+                }
+            }
+            Tab::DataPackages => {
+                if let Some((message, level)) = ui::datapackage::render_datapackage_panel(
+                    ui,
+                    &self.state,
+                    &mut self.ui_state.datapackage_panel,
                 ) {
                     self.show_status(message, level, 5);
                 }
