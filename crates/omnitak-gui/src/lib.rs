@@ -14,10 +14,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 mod ui;
-use ui::*;
 
 pub mod backend;
-use backend::{BackendCommand, BackendEvent, BackendService};
+use backend::BackendService;
 
 pub mod api_client;
 pub use api_client::{ApiClient, ConnectionInfo, ConnectionType, CreateConnectionRequest};
@@ -59,6 +58,12 @@ pub struct OmniTakApp {
 
     /// Flag to track if auto-start has been performed
     pub auto_start_done: bool,
+
+    /// Command palette state
+    pub command_palette: ui::command_palette::CommandPaletteState,
+
+    /// Flag to track if theme has been initialized
+    pub theme_initialized: bool,
 }
 
 /// Status message level
@@ -86,6 +91,8 @@ impl Default for OmniTakApp {
             status_message_expiry: None,
             last_refresh: std::time::Instant::now(),
             auto_start_done: false,
+            command_palette: ui::command_palette::CommandPaletteState::default(),
+            theme_initialized: false,
         }
     }
 }
@@ -129,6 +136,15 @@ pub struct AppSettings {
 
     /// Maximum number of messages to retain
     pub max_message_log_size: usize,
+
+    /// Dark mode enabled
+    pub dark_mode: bool,
+
+    /// UI scale factor
+    pub ui_scale: f32,
+
+    /// Theme name (for future custom themes)
+    pub theme: String,
 }
 
 impl Default for AppSettings {
@@ -136,6 +152,9 @@ impl Default for AppSettings {
         Self {
             auto_start_connections: false,
             max_message_log_size: 1000,
+            dark_mode: true, // Default to dark mode
+            ui_scale: 1.0,
+            theme: "default".to_string(),
         }
     }
 }
@@ -244,6 +263,9 @@ pub struct UiState {
     pub cert_ca_promise: Option<poll_promise::Promise<Option<std::path::PathBuf>>>,
     pub cert_client_promise: Option<poll_promise::Promise<Option<std::path::PathBuf>>>,
     pub cert_key_promise: Option<poll_promise::Promise<Option<std::path::PathBuf>>>,
+
+    /// Quick Connect wizard state
+    pub quick_connect: Option<ui::quick_connect::QuickConnectState>,
 }
 
 impl Default for UiState {
@@ -265,6 +287,7 @@ impl Default for UiState {
             cert_ca_promise: None,
             cert_client_promise: None,
             cert_key_promise: None,
+            quick_connect: None,
         }
     }
 }
@@ -470,6 +493,8 @@ impl OmniTakApp {
             status_message_expiry: None,
             last_refresh: std::time::Instant::now(),
             auto_start_done: false,
+            command_palette: ui::command_palette::CommandPaletteState::default(),
+            theme_initialized: false,
         }
     }
 
@@ -908,6 +933,27 @@ impl OmniTakApp {
 
 impl eframe::App for OmniTakApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Initialize theme on first run
+        if !self.theme_initialized {
+            let dark_mode = {
+                let state = self.state.lock().unwrap();
+                state.settings.dark_mode
+            };
+            ui::command_palette::apply_theme(ctx, dark_mode);
+
+            let ui_scale = {
+                let state = self.state.lock().unwrap();
+                state.settings.ui_scale
+            };
+            if (ui_scale - 1.0).abs() > 0.01 {
+                ctx.set_pixels_per_point(ui_scale);
+            }
+            self.theme_initialized = true;
+        }
+
+        // Handle global keyboard shortcuts
+        ui::command_palette::handle_keyboard_shortcuts(ctx, self);
+
         // Check status message expiry
         self.check_status_expiry();
 
@@ -931,7 +977,7 @@ impl eframe::App for OmniTakApp {
 
         // Top panel with tabs
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 ui.heading("🎯 OmniTAK");
 
                 ui.separator();
@@ -980,6 +1026,15 @@ impl eframe::App for OmniTakApp {
                 {
                     self.ui_state.selected_tab = Tab::Settings;
                 }
+
+                // Spacer to push shortcuts help to the right
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(
+                        egui::RichText::new("Ctrl+K: Command Palette")
+                            .small()
+                            .color(egui::Color32::GRAY),
+                    );
+                });
             });
         });
 
@@ -1015,6 +1070,13 @@ impl eframe::App for OmniTakApp {
                     ui.label(message);
                 });
             });
+        }
+
+        // Render command palette overlay (on top of everything)
+        if let Some(command_id) =
+            ui::command_palette::render_command_palette(ctx, &mut self.command_palette)
+        {
+            ui::command_palette::execute_command(self, &command_id, ctx);
         }
 
         // Request repaint for real-time updates

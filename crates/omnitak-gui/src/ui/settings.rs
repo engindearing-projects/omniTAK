@@ -1,8 +1,7 @@
 //! Settings view for application configuration.
 
-use crate::{AppState, OmniTakApp};
+use crate::OmniTakApp;
 use eframe::egui;
-use std::sync::{Arc, Mutex};
 
 /// Shows the settings view.
 pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
@@ -14,9 +13,9 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
     ui.add_space(20.0);
 
     // About section
-    egui::Frame::none()
+    egui::Frame::NONE
         .fill(egui::Color32::from_gray(35))
-        .rounding(5.0)
+        .corner_radius(5.0)
         .inner_margin(15.0)
         .show(ui, |ui| {
             ui.heading("About OmniTAK");
@@ -31,9 +30,9 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
     ui.add_space(20.0);
 
     // Configuration info
-    egui::Frame::none()
+    egui::Frame::NONE
         .fill(egui::Color32::from_gray(35))
-        .rounding(5.0)
+        .corner_radius(5.0)
         .inner_margin(15.0)
         .show(ui, |ui| {
             ui.heading("Configuration");
@@ -62,9 +61,9 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
     ui.add_space(10.0);
 
     // Import/Export Configuration
-    egui::Frame::none()
+    egui::Frame::NONE
         .fill(egui::Color32::from_gray(35))
-        .rounding(5.0)
+        .corner_radius(5.0)
         .inner_margin(15.0)
         .show(ui, |ui| {
             ui.heading("Import/Export Configuration");
@@ -165,10 +164,193 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
 
     ui.add_space(20.0);
 
+    // Appearance Settings
+    egui::Frame::NONE
+        .fill(ui.visuals().faint_bg_color)
+        .corner_radius(5.0)
+        .inner_margin(15.0)
+        .show(ui, |ui| {
+            ui.heading("Appearance");
+            ui.add_space(10.0);
+
+            // Dark Mode Toggle
+            ui.horizontal(|ui| {
+                let mut dark_mode = {
+                    let state = app.state.lock().unwrap();
+                    state.settings.dark_mode
+                };
+
+                let label = if dark_mode { "🌙 Dark Mode" } else { "☀️ Light Mode" };
+                if ui.checkbox(&mut dark_mode, label).changed() {
+                    let mut state = app.state.lock().unwrap();
+                    state.settings.dark_mode = dark_mode;
+                    drop(state);
+                    crate::ui::command_palette::apply_theme(ui.ctx(), dark_mode);
+                    app.show_status(
+                        if dark_mode {
+                            "Dark mode enabled".to_string()
+                        } else {
+                            "Light mode enabled".to_string()
+                        },
+                        crate::StatusLevel::Info,
+                        2,
+                    );
+                }
+
+                ui.label(egui::RichText::new("Ctrl+Shift+D").small().color(egui::Color32::GRAY));
+            });
+
+            ui.add_space(10.0);
+
+            // UI Scale
+            ui.horizontal(|ui| {
+                ui.label("UI Scale:");
+
+                let mut ui_scale = {
+                    let state = app.state.lock().unwrap();
+                    state.settings.ui_scale
+                };
+
+                let slider = egui::Slider::new(&mut ui_scale, 0.5..=2.0)
+                    .step_by(0.1)
+                    .suffix("x")
+                    .show_value(true);
+
+                if ui.add(slider).changed() {
+                    let mut state = app.state.lock().unwrap();
+                    state.settings.ui_scale = ui_scale;
+                    drop(state);
+                    ui.ctx().set_pixels_per_point(ui_scale);
+                }
+
+                if ui.button("Reset").clicked() {
+                    let mut state = app.state.lock().unwrap();
+                    state.settings.ui_scale = 1.0;
+                    drop(state);
+                    ui.ctx().set_pixels_per_point(1.0);
+                }
+            });
+
+            ui.add_space(5.0);
+            ui.label(
+                egui::RichText::new("Ctrl++ / Ctrl+- to adjust, Ctrl+0 to reset")
+                    .small()
+                    .color(egui::Color32::GRAY),
+            );
+        });
+
+    ui.add_space(20.0);
+
+    // Keyboard Shortcuts Reference
+    egui::Frame::NONE
+        .fill(ui.visuals().faint_bg_color)
+        .corner_radius(5.0)
+        .inner_margin(15.0)
+        .show(ui, |ui| {
+            ui.heading("Keyboard Shortcuts");
+            ui.add_space(10.0);
+
+            egui::Grid::new("shortcuts_grid")
+                .striped(true)
+                .spacing([20.0, 5.0])
+                .show(ui, |ui| {
+                    // General
+                    ui.label(egui::RichText::new("General").strong());
+                    ui.label("");
+                    ui.end_row();
+
+                    ui.label("Ctrl+K");
+                    ui.label("Open Command Palette");
+                    ui.end_row();
+
+                    ui.label("Ctrl+,");
+                    ui.label("Open Settings");
+                    ui.end_row();
+
+                    ui.label("Ctrl+R");
+                    ui.label("Refresh from API");
+                    ui.end_row();
+
+                    // Navigation
+                    ui.label(egui::RichText::new("Navigation").strong());
+                    ui.label("");
+                    ui.end_row();
+
+                    ui.label("Ctrl+1");
+                    ui.label("Dashboard");
+                    ui.end_row();
+
+                    ui.label("Ctrl+2");
+                    ui.label("Connections");
+                    ui.end_row();
+
+                    ui.label("Ctrl+3");
+                    ui.label("Messages");
+                    ui.end_row();
+
+                    ui.label("Ctrl+4");
+                    ui.label("Map");
+                    ui.end_row();
+
+                    ui.label("Ctrl+5");
+                    ui.label("Plugins");
+                    ui.end_row();
+
+                    // Connections
+                    ui.label(egui::RichText::new("Connections").strong());
+                    ui.label("");
+                    ui.end_row();
+
+                    ui.label("Ctrl+N");
+                    ui.label("Add New Connection");
+                    ui.end_row();
+
+                    ui.label("Ctrl+Shift+N");
+                    ui.label("Quick Connect Wizard");
+                    ui.end_row();
+
+                    // View
+                    ui.label(egui::RichText::new("View").strong());
+                    ui.label("");
+                    ui.end_row();
+
+                    ui.label("Ctrl+Shift+D");
+                    ui.label("Toggle Dark Mode");
+                    ui.end_row();
+
+                    ui.label("Ctrl++");
+                    ui.label("Zoom In");
+                    ui.end_row();
+
+                    ui.label("Ctrl+-");
+                    ui.label("Zoom Out");
+                    ui.end_row();
+
+                    ui.label("Ctrl+0");
+                    ui.label("Reset Zoom");
+                    ui.end_row();
+
+                    // Tools
+                    ui.label(egui::RichText::new("Tools").strong());
+                    ui.label("");
+                    ui.end_row();
+
+                    ui.label("Ctrl+E");
+                    ui.label("Export Configuration");
+                    ui.end_row();
+
+                    ui.label("Ctrl+I");
+                    ui.label("Import Configuration");
+                    ui.end_row();
+                });
+        });
+
+    ui.add_space(20.0);
+
     // Application Settings
-    egui::Frame::none()
-        .fill(egui::Color32::from_gray(35))
-        .rounding(5.0)
+    egui::Frame::NONE
+        .fill(ui.visuals().faint_bg_color)
+        .corner_radius(5.0)
         .inner_margin(15.0)
         .show(ui, |ui| {
             ui.heading("Application Settings");
@@ -199,7 +381,7 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
             ui.horizontal(|ui| {
                 ui.label("Message log retention:");
 
-                let mut max_messages = {
+                let max_messages = {
                     let state = app.state.lock().unwrap();
                     state.settings.max_message_log_size
                 };

@@ -12,6 +12,7 @@ omnitak-pool = { path = "../omnitak-pool" }
 omnitak-api = { path = "../omnitak-api" }
 omnitak-cot = { path = "../omnitak-cot" }
 omnitak-plugin-api = { path = "../omnitak-plugin-api" }
+omnitak-cert = { path = "../omnitak-cert" }
 
 # GUI framework
 eframe = { workspace = true }
@@ -47,3 +48,16 @@ walkers = "0.49"
 
 # File picker
 rfd = "0.15"
+
+# Offline maps (MBTiles)
+rusqlite = { version = "0.33", features = ["bundled"] }
+
+# GeoJSON/KML parsing
+geojson = "0.24"
+quick-xml = "0.37"
+
+# Base64 for tile data
+base64 = "0.22"
+
+# Image processing
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
