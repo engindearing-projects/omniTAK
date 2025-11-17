@@ -1421,19 +1421,13 @@ pub fn show(ui: &mut egui::Ui, app_state: &Arc<Mutex<AppState>>, map_state: &mut
     // Handle map interactions for drawing
     if map_response.clicked() && map_state.drawing_tool != DrawingTool::Select {
         if let Some(pos) = map_response.interact_pointer_pos() {
-            // Convert screen position to geo coordinates (approximate)
-            // This is a simplified conversion - would need proper inverse projection
-            let map_rect = map_response.rect;
-            let center_lat = 37.7749;
-            let center_lon = -122.4194;
-            let zoom = memory.zoom();
-            let scale = 0.01 / (zoom as f64 / 10.0);
-
-            let dx = (pos.x - map_rect.center().x) as f64;
-            let dy = (pos.y - map_rect.center().y) as f64;
-
-            let click_lat = center_lat - dy * scale;
-            let click_lon = center_lon + dx * scale;
+            // Convert screen position to geo coordinates using proper projection
+            let projector = Projector::new(map_response.rect, memory, center_pos);
+            let screen_vec = egui::vec2(pos.x, pos.y);
+            let geo_pos = projector.unproject(screen_vec);
+            // geo_types::Point uses x() for longitude, y() for latitude
+            let click_lon = geo_pos.x();
+            let click_lat = geo_pos.y();
 
             match map_state.drawing_tool {
                 DrawingTool::Marker => {
