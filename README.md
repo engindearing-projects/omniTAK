@@ -12,9 +12,47 @@ OmniTAK is a high-performance, memory-safe TAK (Team Awareness Kit) server aggre
 - **WASM Plugin System**: Extend functionality with sandboxed WebAssembly plugins
 - **REST API**: Complete HTTP API for all operations
 - **Web Interface**: Modern browser-based control panel
-- **Desktop GUI**: Native application for macOS, Linux, and Windows
+- **Desktop GUI**: Native application with command palette, dark mode, and keyboard shortcuts
+- **Rich Mapping**: Interactive maps with drawing tools, Blue Force Tracking, and offline support
 - **Natural Language Interface**: Create TAK objects using plain English commands
 - **Real-Time Metrics**: Prometheus-compatible metrics and monitoring
+
+## What's New in v0.2.0
+
+### Desktop GUI Enhancements
+
+**Command Palette (Ctrl+K)**
+- Quick access to all commands with fuzzy search
+- Execute actions without leaving the keyboard
+- Organized by category: Navigation, Connections, View, Tools, Settings
+
+**Keyboard Shortcuts**
+- Navigate tabs with Ctrl+1 through Ctrl+5
+- Ctrl+N to add connections, Ctrl+Shift+N for quick connect wizard
+- Ctrl+R to refresh, Ctrl+E to export, Ctrl+I to import
+- Full shortcut reference available in Settings
+
+**Dark Mode and Theming**
+- Toggle between light and dark themes with Ctrl+Shift+D
+- Adjustable UI scale from 0.5x to 2.0x
+- Theme preferences persist between sessions
+
+**Interactive Map Features**
+- Drawing tools: markers, lines, circles, polygons, range rings
+- Measurement tool for distance calculations
+- Blue Force Tracking with historical trails and velocity vectors
+- Track selection and inspection panel
+
+**Offline Map Support**
+- Load MBTiles databases for offline tile storage
+- Import GeoJSON files for vector overlays
+- Import KML files (Google Earth format)
+- Toggle layer visibility and manage multiple overlays
+
+**Quick Connect Wizard**
+- Simplified server setup with guided steps
+- Automatic certificate configuration
+- Connection testing before saving
 
 ## Screenshots
 
@@ -117,7 +155,7 @@ python3 -m http.server 8080
 
 ### Step 3 (Optional): Run the Desktop GUI
 
-The native desktop application provides the same features as the web interface.
+The native desktop application provides advanced features beyond the web interface, including command palette, keyboard shortcuts, and rich mapping capabilities.
 
 ```bash
 # Build the GUI
@@ -127,7 +165,16 @@ cargo build --bin omnitak-gui --release
 ./target/release/omnitak-gui
 ```
 
-**Note:** The GUI currently runs standalone. Update coming soon to connect to the REST API.
+**Features:**
+- Command palette with Ctrl+K for quick actions
+- Keyboard shortcuts for efficient navigation
+- Dark mode with adjustable UI scale
+- Interactive map with drawing tools
+- Blue Force Tracking visualization
+- Offline map support (MBTiles, GeoJSON, KML)
+- Real-time connection monitoring
+
+**Default API:** http://localhost:9443 (configurable at login)
 
 ---
 
@@ -719,4 +766,4 @@ at your option.
 
 ---
 
-**Built with Rust for reliability and performance in tactical environments.** 🚀
+**Built with Rust for reliability and performance in tactical environments.**
