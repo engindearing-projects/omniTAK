@@ -18,11 +18,11 @@ interface filter {
         /// Team color (e.g., "cyan", "yellow")
         team: option<string>,
         /// Latitude in decimal degrees
-        lat: float64,
+        lat: f64,
         /// Longitude in decimal degrees
-        lon: float64,
+        lon: f64,
         /// Height above ellipsoid in meters
-        hae: option<float64>,
+        hae: option<f64>,
         /// Message timestamp (ISO 8601 format)
         time: string,
         /// Full XML payload (optional, for advanced filtering)
@@ -37,6 +37,17 @@ interface filter {
         block,
     }
 
+    /// Plugin metadata
+    record filter-metadata {
+        id: string,
+        name: string,
+        version: string,
+        author: string,
+        description: string,
+        /// Maximum expected execution time in microseconds
+        max-execution-time-us: u64,
+    }
+
     /// Evaluate whether a message should pass through the filter
     evaluate: func(msg: cot-message) -> filter-result;
 
@@ -49,6 +60,16 @@ interface filter {
 
 /// Message transformation interface
 interface transformer {
+    record transformer-metadata {
+        id: string,
+        name: string,
+        version: string,
+        author: string,
+        description: string,
+        /// Supported CoT types (e.g., ["a-f-*", "a-h-*"])
+        supported-types: list<string>,
+    }
+
     /// Transform a message payload
     /// Returns the transformed payload or error message
     transform: func(data: list<u8>) -> result<list<u8>, string>;
@@ -117,7 +138,7 @@ interface host {
     get-current-time-ms: func() -> u64;
 
     /// Query geographic database (if available)
-    query-elevation: func(lat: float64, lon: float64) -> option<float64>;
+    query-elevation: func(lat: f64, lon: f64) -> option<f64>;
 
     enum log-level {
         trace,

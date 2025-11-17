@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::time::Instant;
-use wasmtime::component::{Component, Instance, Linker};
+use wasmtime::component::{Component, Linker};
 use wasmtime::Store;
 
 use crate::error::{PluginError, PluginResult};
@@ -9,6 +9,9 @@ use crate::runtime::{PluginRuntime, PluginState};
 
 // Re-export filter types from omnitak-filter
 pub use omnitak_filter::rules::{CotMessage, FilterResult, FilterRule};
+
+// Import the generated WIT bindings
+use crate::FilterPlugin;
 
 /// WASM-based filter plugin that implements the FilterRule trait
 pub struct WasmFilterPlugin {
@@ -56,22 +59,20 @@ impl WasmFilterPlugin {
         &self.metadata
     }
 
-    /// Create a new instance for each evaluation
-    /// Note: We create fresh instances instead of caching to maintain Sync compatibility
-    async fn create_instance(&self) -> PluginResult<(Store<PluginState>, Instance)> {
-        // Create new instance
+    /// Create a new plugin instance
+    async fn create_plugin_instance(&self) -> PluginResult<(Store<PluginState>, FilterPlugin)> {
         let mut store = self.runtime.create_store();
         let mut linker = Linker::new(self.runtime.engine());
 
-        // Add host functions
+        // Add host functions (WASI + custom bindings)
         Self::add_host_functions(&mut linker)?;
 
-        let instance = linker
-            .instantiate_async(&mut store, &self.component)
+        // Instantiate the plugin using the generated bindings
+        let plugin = FilterPlugin::instantiate_async(&mut store, &self.component, &linker)
             .await
             .map_err(|e| PluginError::InstantiationError(e.to_string()))?;
 
-        Ok((store, instance))
+        Ok((store, plugin))
     }
 
     /// Add host functions that plugins can call
@@ -80,24 +81,41 @@ impl WasmFilterPlugin {
         wasmtime_wasi::add_to_linker_async(linker)
             .map_err(|e| PluginError::InstantiationError(e.to_string()))?;
 
-        // Add custom host functions
-        // TODO: Implement host interface bindings
-        // linker.func_wrap_async("host", "log", |_caller, level, msg| { ... });
-        // linker.func_wrap_async("host", "get-current-time-ms", |_caller| { ... });
+        // Add our custom host interface bindings using the generated trait
+        FilterPlugin::add_to_linker(linker, |state| state)
+            .map_err(|e| PluginError::InstantiationError(e.to_string()))?;
 
         Ok(())
     }
 
     /// Evaluate filter (internal implementation)
-    async fn evaluate_async(&self, _msg: &CotMessage<'_>) -> PluginResult<FilterResult> {
+    async fn evaluate_async(&self, msg: &CotMessage<'_>) -> PluginResult<FilterResult> {
         let start = Instant::now();
 
         // Create new instance for this evaluation
-        let (_store, _instance) = self.create_instance().await?;
+        let (mut store, plugin) = self.create_plugin_instance().await?;
 
-        // TODO: Call the WASM function with msg data
-        // This requires WIT bindings generation
-        // For now, return a placeholder
+        // Convert CotMessage to WIT cot-message type
+        // Note: WIT type has more fields than CotMessage, we provide defaults
+        let wit_msg = crate::exports::omnitak::plugin::filter::CotMessage {
+            cot_type: msg.cot_type.to_string(),
+            uid: msg.uid.to_string(),
+            callsign: msg.callsign.map(|s| s.to_string()),
+            group: msg.group.map(|s| s.to_string()),
+            team: msg.team.map(|s| s.to_string()),
+            lat: msg.lat,
+            lon: msg.lon,
+            hae: msg.hae,
+            time: String::new(), // Not available in CotMessage
+            xml_payload: None,    // Not available in CotMessage
+        };
+
+        // Call the WASM exported evaluate function
+        let result = plugin
+            .omnitak_plugin_filter()
+            .call_evaluate(&mut store, &wit_msg)
+            .await
+            .map_err(|e| PluginError::ExecutionError(e.to_string()))?;
 
         // Check timeout
         let elapsed = start.elapsed();
@@ -105,8 +123,11 @@ impl WasmFilterPlugin {
             return Err(PluginError::Timeout(self.metadata.max_execution_time_us));
         }
 
-        // Placeholder - in real implementation, call WASM exported function
-        Ok(FilterResult::Pass)
+        // Convert WIT filter-result to FilterResult
+        match result {
+            crate::exports::omnitak::plugin::filter::FilterResult::Pass => Ok(FilterResult::Pass),
+            crate::exports::omnitak::plugin::filter::FilterResult::Block => Ok(FilterResult::Block),
+        }
     }
 }
 

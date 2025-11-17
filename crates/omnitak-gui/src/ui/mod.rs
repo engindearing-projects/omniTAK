@@ -1,5 +1,6 @@
 //! UI modules for the OmniTAK GUI.
 
+pub mod certificates;
 pub mod command_palette;
 pub mod connections;
 pub mod dashboard;

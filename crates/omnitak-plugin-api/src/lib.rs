@@ -9,6 +9,13 @@ pub mod security;
 pub mod wasm_filter;
 pub mod wasm_transformer;
 
+// Generate bindings from WIT file
+wasmtime::component::bindgen!({
+    path: "wit/plugin.wit",
+    world: "filter-plugin",
+    async: true,
+});
+
 pub use error::{PluginError, PluginResult};
 pub use manager::{PluginManager, PluginManagerConfig};
 pub use metadata::{FilterMetadata, PluginCapability, PluginInfo, PluginMetadata, TransformerMetadata};

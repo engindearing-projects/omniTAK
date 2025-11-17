@@ -266,6 +266,9 @@ pub struct UiState {
 
     /// Quick Connect wizard state
     pub quick_connect: Option<ui::quick_connect::QuickConnectState>,
+
+    /// Certificate manager state
+    pub certificate_manager: ui::certificates::CertificateManagerState,
 }
 
 impl Default for UiState {
@@ -288,6 +291,7 @@ impl Default for UiState {
             cert_client_promise: None,
             cert_key_promise: None,
             quick_connect: None,
+            certificate_manager: ui::certificates::CertificateManagerState::default(),
         }
     }
 }
@@ -1049,6 +1053,7 @@ impl eframe::App for OmniTakApp {
                     ui,
                     &self.state,
                     &mut self.ui_state.plugin_panel,
+                    self.api_client.as_ref(),
                 ) {
                     self.show_status(message, level, 5);
                 }

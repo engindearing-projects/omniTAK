@@ -9,6 +9,12 @@ rustls = { version = "0.23", features = ["std", "ring"] }
 rustls-pemfile = "2.2"
 p12 = "0.6"  # PKCS#12 support
 
+# X.509 certificate parsing
+x509-parser = "0.16"
+
+# ZIP file extraction
+zip = "2.2"
+
 # Error handling
 anyhow = "1.0"
 thiserror = "2.0"
@@ -21,3 +27,9 @@ tracing = "0.1"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
+
+# Filesystem operations
+tempfile = "3.10"
+
+# Time handling
+chrono = "0.4"

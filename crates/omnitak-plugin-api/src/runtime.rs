@@ -172,3 +172,29 @@ impl wasmtime::ResourceLimiter for ResourceLimits {
         Ok(desired < 10000)
     }
 }
+
+// Implement Host trait for plugin imports (async version)
+#[wasmtime::component::__internal::async_trait]
+impl crate::omnitak::plugin::host::Host for PluginState {
+    async fn log(&mut self, level: crate::omnitak::plugin::host::LogLevel, message: String) {
+        match level {
+            crate::omnitak::plugin::host::LogLevel::Trace => tracing::trace!("Plugin: {}", message),
+            crate::omnitak::plugin::host::LogLevel::Debug => tracing::debug!("Plugin: {}", message),
+            crate::omnitak::plugin::host::LogLevel::Info => tracing::info!("Plugin: {}", message),
+            crate::omnitak::plugin::host::LogLevel::Warn => tracing::warn!("Plugin: {}", message),
+            crate::omnitak::plugin::host::LogLevel::Error => tracing::error!("Plugin: {}", message),
+        }
+    }
+
+    async fn get_current_time_ms(&mut self) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+    }
+
+    async fn query_elevation(&mut self, _lat: f64, _lon: f64) -> Option<f64> {
+        // Elevation queries not implemented yet
+        None
+    }
+}

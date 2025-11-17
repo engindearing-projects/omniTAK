@@ -412,4 +412,18 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
         });
 
     ui.add_space(20.0);
+
+    // Certificate Management
+    egui::CollapsingHeader::new("Certificate Management")
+        .default_open(false)
+        .show(ui, |ui| {
+            if let Some((message, level)) = crate::ui::certificates::render_certificate_manager(
+                ui,
+                &mut app.ui_state.certificate_manager,
+            ) {
+                app.show_status(message, level, 5);
+            }
+        });
+
+    ui.add_space(20.0);
 }
