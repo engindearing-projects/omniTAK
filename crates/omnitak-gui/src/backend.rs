@@ -7,7 +7,7 @@ use crate::{AppMetrics, ConnectionMetadata, MessageLog};
 use async_channel::{unbounded, Receiver, Sender};
 use omnitak_core::types::{ConnectionId, ServerConfig, ServerStatus};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 /// Commands that can be sent to the backend service.
@@ -38,7 +38,8 @@ pub enum BackendEvent {
 
 /// Backend service that manages connections.
 pub struct BackendService {
-    /// Runtime for async operations
+    /// Runtime for async operations (kept alive for worker thread)
+    #[allow(dead_code)]
     runtime: Arc<Runtime>,
     /// Command sender
     command_tx: Sender<BackendCommand>,
@@ -125,9 +126,11 @@ struct WorkerState {
 
 /// Handle to an active connection
 struct ConnectionHandle {
-    /// Connection ID
+    /// Connection ID (kept for future use)
+    #[allow(dead_code)]
     id: ConnectionId,
-    /// Server configuration
+    /// Server configuration (kept for reconnection logic)
+    #[allow(dead_code)]
     config: ServerConfig,
     /// Metadata
     metadata: ConnectionMetadata,

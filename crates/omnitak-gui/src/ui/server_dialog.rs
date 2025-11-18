@@ -1,10 +1,11 @@
 //! Server add/edit dialog.
 
-use crate::{OmniTakApp, ServerDialogState};
+use crate::OmniTakApp;
 use eframe::egui;
 use omnitak_core::types::Protocol;
 
 /// Shows the server add/edit dialog.
+#[allow(dead_code)]
 pub fn show(ctx: &egui::Context, app: &mut OmniTakApp) {
     // Take ownership of dialog state temporarily to avoid borrow conflicts
     let Some(mut dialog_state) = app.ui_state.server_dialog.take() else {
@@ -47,7 +48,7 @@ pub fn show(ctx: &egui::Context, app: &mut OmniTakApp) {
 
                 // Protocol
                 ui.label("Protocol:");
-                egui::ComboBox::from_id_source("protocol_combo")
+                egui::ComboBox::from_id_salt("protocol_combo")
                     .selected_text(format!("{}", dialog_state.config.protocol))
                     .show_ui(ui, |ui| {
                         ui.selectable_value(

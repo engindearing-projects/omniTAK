@@ -1,9 +1,8 @@
 //! Dashboard view showing system overview and metrics.
 
-use crate::{format_bytes, format_duration, AppState, OmniTakApp};
+use crate::{format_bytes, format_duration, OmniTakApp};
 use eframe::egui;
 use omnitak_core::types::ServerStatus;
-use std::sync::{Arc, Mutex};
 
 /// Shows the dashboard view.
 pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
@@ -143,9 +142,9 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
 
 /// Shows a metric card.
 fn metric_card(ui: &mut egui::Ui, title: &str, value: &str, color: egui::Color32) {
-    egui::Frame::none()
+    egui::Frame::NONE
         .fill(egui::Color32::from_gray(40))
-        .rounding(5.0)
+        .corner_radius(5.0)
         .inner_margin(15.0)
         .show(ui, |ui| {
             ui.vertical(|ui| {

@@ -1,11 +1,8 @@
 //! ADB integration endpoints for pulling certificates from connected Android devices
 
-use crate::auth::{AuthUser, RequireOperator};
-use crate::types::*;
+use crate::auth::AuthUser;
 use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
+    extract::State,
     Json,
 };
 use omnitak_adb::{AdbClient, AtakPackage, TakCertificateBundle};
@@ -14,10 +11,7 @@ use omnitak_client::ClientConfig;
 use omnitak_core::ConnectionId;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::{error, info, warn};
-use uuid::Uuid;
 use validator::Validate;
 
 use super::rest::{ApiState, ApiError};

@@ -6,11 +6,8 @@
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tokio::time::{interval, Duration};
-use tracing::{debug, error, info, warn};
 
 pub mod device;
 pub mod monitor;

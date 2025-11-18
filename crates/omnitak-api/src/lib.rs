@@ -41,14 +41,14 @@ pub mod static_files;
 pub mod types;
 pub mod websocket;
 
-use auth::{AuthConfig, AuthService, AuthUser};
+use auth::{AuthConfig, AuthService};
 use middleware::{
     RateLimitState, ReadinessState, cors_layer, logging_middleware, rate_limit_middleware,
     request_id_middleware, security_headers_middleware, timeout_middleware,
 };
 use omnitak_plugin_api::PluginManager;
 use omnitak_pool::{
-    AggregatorConfig, ConcurrencyConfig, ConnectionPool, DistributionStrategy, DistributorConfig,
+    AggregatorConfig, ConnectionPool, DistributionStrategy, DistributorConfig,
     MessageAggregator, MessageDistributor, PoolConfig,
 };
 use rest::ApiState;

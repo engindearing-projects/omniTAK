@@ -103,12 +103,39 @@ fn scan_for_certificates() -> Option<CertificateScanResult> {
 
 /// Shows the connections view.
 pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
+    // Check if Quick Connect wizard is open
+    if app.ui_state.quick_connect.is_some() {
+        // Take ownership temporarily to avoid borrow conflicts
+        let mut quick_connect_state = app.ui_state.quick_connect.take().unwrap();
+        let mut close_wizard = false;
+
+        if let Some((msg, level)) = super::quick_connect::render_quick_connect(ui, app, &mut quick_connect_state) {
+            app.show_status(msg, level, 3);
+        }
+
+        ui.add_space(10.0);
+        if ui.button("❌ Close Wizard").clicked() {
+            close_wizard = true;
+        }
+
+        if !close_wizard {
+            // Restore the state
+            app.ui_state.quick_connect = Some(quick_connect_state);
+        }
+        return;
+    }
+
     ui.horizontal(|ui| {
         ui.heading("Server Connections");
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button("🔄 Refresh").clicked() {
                 app.refresh_from_api();
                 app.show_status("Connections refreshed".to_string(), crate::StatusLevel::Success, 2);
+            }
+
+            // Quick Connect button - prominent placement
+            if ui.button("⚡ Quick Connect").clicked() {
+                app.ui_state.quick_connect = Some(super::quick_connect::QuickConnectState::new());
             }
         });
     });
@@ -160,7 +187,7 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
         })
         .default_open(true)
         .show(ui, |ui| {
-            egui::Frame::none()
+            egui::Frame::NONE
                 .fill(egui::Color32::from_gray(40))
                 .corner_radius(5.0)
                 .inner_margin(15.0)
@@ -346,7 +373,7 @@ pub fn show(ui: &mut egui::Ui, app: &mut OmniTakApp) {
 
     egui::ScrollArea::vertical().show(ui, |ui| {
         for (idx, server) in servers_clone.iter().enumerate() {
-            egui::Frame::none()
+            egui::Frame::NONE
                 .fill(egui::Color32::from_gray(35))
                 .corner_radius(5.0)
                 .inner_margin(15.0)

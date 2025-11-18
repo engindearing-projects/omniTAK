@@ -90,7 +90,7 @@ fn show_filter_controls(ui: &mut egui::Ui, ui_state: &mut UiState, messages: &[M
 
         // Affiliation filter dropdown
         ui.label("Affiliation:");
-        egui::ComboBox::from_id_source("affiliation_filter")
+        egui::ComboBox::from_id_salt("affiliation_filter")
             .selected_text(format!("{:?}", ui_state.affiliation_filter))
             .show_ui(ui, |ui| {
                 ui.selectable_value(
@@ -199,10 +199,10 @@ fn show_message_card(ui: &mut egui::Ui, msg: &MessageLog, ui_state: &mut UiState
         .unwrap_or(&msg.msg_type);
     let is_expanded = ui_state.expanded_messages.contains(msg_id);
 
-    egui::Frame::none()
+    egui::Frame::NONE
         .fill(ui.style().visuals.faint_bg_color)
         .stroke(ui.style().visuals.widgets.noninteractive.bg_stroke)
-        .rounding(4.0)
+        .corner_radius(4.0)
         .inner_margin(8.0)
         .show(ui, |ui| {
             // Header row
@@ -337,7 +337,7 @@ fn show_statistics_panel(ui: &mut egui::Ui, messages: &[MessageLog], ui_state: &
     let total = messages.len() as f32;
     for (affiliation, count) in affiliation_counts.iter() {
         let (color, icon, label) = get_affiliation_display(Some(affiliation));
-        let percentage = (*count as f32 / total) * 100.0;
+        let _percentage = (*count as f32 / total) * 100.0;
 
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(icon).color(color));
@@ -485,10 +485,10 @@ fn show_message_details_dialog(ctx: &egui::Context, ui_state: &mut UiState) {
                         ui.label(egui::RichText::new("Raw Content:").strong());
                         ui.add_space(5.0);
 
-                        egui::Frame::none()
+                        egui::Frame::NONE
                             .fill(egui::Color32::from_gray(30))
                             .stroke(egui::Stroke::new(1.0, egui::Color32::from_gray(60)))
-                            .rounding(4.0)
+                            .corner_radius(4.0)
                             .inner_margin(8.0)
                             .show(ui, |ui| {
                                 egui::ScrollArea::horizontal().show(ui, |ui| {

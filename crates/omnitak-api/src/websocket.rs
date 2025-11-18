@@ -1,6 +1,6 @@
 //! WebSocket API for real-time CoT message streaming and system events
 
-use crate::auth::{AuthService, AuthUser};
+use crate::auth::AuthService;
 use crate::types::{WsClientMessage, WsServerMessage};
 use axum::{
     Router,
@@ -30,7 +30,8 @@ pub struct WsState {
     cot_tx: broadcast::Sender<WsServerMessage>,
     /// Broadcast channel for system events
     event_tx: broadcast::Sender<WsServerMessage>,
-    /// Authentication service
+    /// Authentication service (kept for future auth integration)
+    #[allow(dead_code)]
     auth_service: Arc<AuthService>,
 }
 

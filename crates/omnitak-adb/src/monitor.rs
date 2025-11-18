@@ -7,7 +7,7 @@ use tokio::sync::{mpsc, RwLock};
 use tokio::time::{interval, Duration};
 use tracing::{debug, info, warn};
 
-use crate::{AdbClient, DeviceInfo};
+use crate::AdbClient;
 
 /// Device event types
 #[derive(Debug, Clone, PartialEq, Eq)]
