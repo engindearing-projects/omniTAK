@@ -5,6 +5,7 @@ pub mod command_palette;
 pub mod connections;
 pub mod dashboard;
 pub mod datapackage;
+pub mod enrollment;
 pub mod map;
 pub mod messages;
 pub mod offline_maps;

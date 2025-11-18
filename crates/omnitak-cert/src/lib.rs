@@ -2,6 +2,9 @@
 //!
 //! Handles loading, parsing, and validating certificates for TAK server connections.
 //! Supports PEM, DER, and PKCS#12 formats with password protection.
+//! Includes certificate enrollment for TAK servers requiring username/password authentication.
+
+pub mod enrollment;
 
 use anyhow::{Context, Result, anyhow};
 use base64::prelude::*;
