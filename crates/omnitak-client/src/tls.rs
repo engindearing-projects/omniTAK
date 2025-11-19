@@ -7,17 +7,16 @@ use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
 use omnitak_cert::{CertificateBundle, CertificateData};
-use rustls::pki_types::{CertificateDer, ServerName};
-use rustls::{ClientConfig as RustlsConfig, RootCertStore};
-use std::io::BufReader;
+use native_tls::{Certificate, Identity, TlsConnector as NativeTlsConnector};
 use std::path::PathBuf;
+use base64::Engine;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::timeout;
-use tokio_rustls::TlsConnector;
-use tokio_rustls::client::TlsStream;
+use tokio_native_tls::TlsConnector;
+use tokio_native_tls::TlsStream;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -171,7 +170,7 @@ pub struct TlsClient {
     config: TlsClientConfig,
     status: Arc<ConnectionStatus>,
     stream: Option<TlsStream<TcpStream>>,
-    tls_config: Arc<RustlsConfig>,
+    tls_config: Arc<NativeTlsConnector>,
     recv_tx: Option<Sender<Result<CotMessage>>>,
     recv_rx: Option<Receiver<Result<CotMessage>>>,
     shutdown_tx: Option<Sender<()>>,
@@ -199,22 +198,97 @@ impl TlsClient {
         &self.status
     }
 
-    /// Build rustls configuration
-    fn build_tls_config(config: &TlsClientConfig) -> Result<RustlsConfig> {
-        info!("Building TLS configuration");
+    /// Build native-tls configuration
+    fn build_tls_config(config: &TlsClientConfig) -> Result<NativeTlsConnector> {
+        info!("Building TLS configuration with native-tls");
 
-        // Install crypto provider if not already installed
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        let mut builder = NativeTlsConnector::builder();
 
-        // Load or parse certificate bundle based on source
-        let bundle = match &config.cert_config.source {
+        // Load certificates based on source
+        match &config.cert_config.source {
             TlsCertSource::Files {
                 cert_path,
                 key_path,
                 ca_cert_path,
             } => {
                 info!("Loading certificates from files");
-                Self::load_bundle_from_files(cert_path, key_path, ca_cert_path.as_ref())?
+
+                // Check if this is a P12 file (both cert and key point to same file)
+                if cert_path == key_path && cert_path.extension().and_then(|s| s.to_str()) == Some("p12") {
+                    // Load PKCS#12 file directly
+                    let p12_data = std::fs::read(cert_path)
+                        .context("Failed to read P12 certificate file")?;
+
+                    // Try with common passwords
+                    let identity = Identity::from_pkcs12(&p12_data, "omnitak")
+                        .or_else(|_| Identity::from_pkcs12(&p12_data, ""))
+                        .or_else(|_| Identity::from_pkcs12(&p12_data, "changeit"))
+                        .or_else(|_| Identity::from_pkcs12(&p12_data, "atakatak"))
+                        .context("Failed to load P12 identity (tried 'omnitak', empty, 'changeit', 'atakatak')")?;
+
+                    builder.identity(identity);
+                    info!("Loaded P12 identity from file");
+                } else {
+                    // Convert PEM files to PKCS#12 using openssl command
+                    // This is necessary because native-tls doesn't support loading from separate PEM files
+                    info!("Converting PEM certificates to PKCS#12 format");
+
+                    let temp_p12 = std::env::temp_dir().join(format!("omnitak_temp_{}.p12", std::process::id()));
+
+                    // Create PKCS#12 file from PEM cert and key using 3DES encryption for compatibility
+                    let openssl_result = std::process::Command::new("openssl")
+                        .args(&[
+                            "pkcs12",
+                            "-export",
+                            "-descert",  // Use 3DES for better compatibility with native-tls
+                            "-out", temp_p12.to_str().unwrap(),
+                            "-inkey", key_path.to_str().unwrap(),
+                            "-in", cert_path.to_str().unwrap(),
+                            "-password", "pass:",  // Empty password
+                        ])
+                        .output()
+                        .context("Failed to execute openssl command")?;
+
+                    if !openssl_result.status.success() {
+                        return Err(anyhow!("Failed to convert PEM to PKCS12: {}",
+                            String::from_utf8_lossy(&openssl_result.stderr)));
+                    }
+
+                    // Load the temporary P12 file
+                    let p12_data = std::fs::read(&temp_p12)
+                        .context("Failed to read temporary P12 file")?;
+
+                    let identity = Identity::from_pkcs12(&p12_data, "")
+                        .map_err(|e| anyhow!("Failed to load converted P12 identity: {}. This may be due to encryption compatibility issues with native-tls on your platform.", e))?;
+
+                    builder.identity(identity);
+
+                    // Clean up temporary file
+                    let _ = std::fs::remove_file(&temp_p12);
+
+                    info!("Loaded client certificate and key from PEM files (converted to P12)");
+                }
+
+                // Load CA certificate if provided
+                if let Some(ca_path) = ca_cert_path {
+                    let ca_data = std::fs::read(ca_path)
+                        .context("Failed to read CA certificate file")?;
+
+                    // Try loading as PEM first, then as P12 truststore
+                    let ca_cert = Certificate::from_pem(&ca_data)
+                        .or_else(|_| {
+                            // If PEM loading fails, try as P12 truststore
+                            // Extract CA certs from P12 file
+                            Identity::from_pkcs12(&ca_data, "")
+                                .or_else(|_| Identity::from_pkcs12(&ca_data, "changeit"))
+                                .map_err(|e| anyhow!("Failed to load CA from P12: {}", e))
+                                .and_then(|_| Err(anyhow!("P12 CA extraction not yet implemented, please use PEM format for CA")))
+                        })
+                        .context("Failed to load CA certificate (tried PEM and P12 formats)")?;
+
+                    builder.add_root_certificate(ca_cert);
+                    info!("Loaded custom CA certificate from file");
+                }
             }
             TlsCertSource::Memory {
                 cert_data,
@@ -223,120 +297,60 @@ impl TlsClient {
                 password,
             } => {
                 info!("Loading certificates from memory");
-                CertificateBundle::from_certificate_data(
-                    cert_data,
-                    key_data.as_ref(),
-                    ca_data.as_ref(),
-                    password.as_deref(),
-                )?
-            }
-            TlsCertSource::Bundle(bundle) => {
-                info!("Using pre-parsed certificate bundle");
-                bundle.clone()
-            }
-        };
 
-        // Load root certificates
-        let mut root_store = RootCertStore::empty();
+                // Decode base64-encoded certificate data
+                let cert_bytes = base64::engine::general_purpose::STANDARD
+                    .decode(&cert_data.data)
+                    .context("Failed to decode certificate from base64")?;
 
-        if let Some(ca_certs) = &bundle.ca_certs {
-            // Use custom CA certificates from bundle
-            for cert in ca_certs {
-                root_store
-                    .add(cert.clone())
-                    .context("Failed to add CA certificate to root store")?;
+                let key_bytes = key_data.as_ref()
+                    .ok_or_else(|| anyhow!("Key data required for memory source"))?;
+                let key_bytes = base64::engine::general_purpose::STANDARD
+                    .decode(&key_bytes.data)
+                    .context("Failed to decode key from base64")?;
+
+                let identity = Identity::from_pkcs8(&cert_bytes, &key_bytes)
+                    .context("Failed to create identity from memory")?;
+                builder.identity(identity);
+
+                // Load CA if provided
+                if let Some(ca) = ca_data {
+                    let ca_bytes = base64::engine::general_purpose::STANDARD
+                        .decode(&ca.data)
+                        .context("Failed to decode CA from base64")?;
+                    let ca_cert = Certificate::from_pem(&ca_bytes)
+                        .context("Failed to load CA certificate from memory")?;
+                    builder.add_root_certificate(ca_cert);
+                    info!("Loaded custom CA certificate from memory");
+                }
             }
-            info!("Loaded {} custom CA certificate(s)", ca_certs.len());
-        } else {
-            // Use system root certificates
-            root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-            info!("Using system root certificates");
+            TlsCertSource::Bundle(_bundle) => {
+                return Err(anyhow!("Bundle source not supported with native-tls, use Files or Memory"));
+            }
         }
 
-        info!("Loaded {} client certificate(s)", bundle.certs.len());
-
-        // Build TLS configuration
-        let mut tls_config = RustlsConfig::builder()
-            .with_root_certificates(root_store)
-            .with_client_auth_cert(bundle.certs, bundle.private_key)
-            .context("Failed to build TLS config with client auth")?;
-
-        // Configure TLS versions
-        if config.tls13_only {
-            // TLS 1.3 only (most secure)
-            info!("Configured for TLS 1.3 only");
-        }
-
-        // Disable certificate verification if requested (NOT RECOMMENDED)
+        // Configure certificate verification
         if !config.verify_server {
             warn!("Server certificate verification is DISABLED - this is insecure!");
+            builder.danger_accept_invalid_certs(true);
+            builder.danger_accept_invalid_hostnames(true);
         }
 
-        tls_config.alpn_protocols = vec![b"http/1.1".to_vec()];
+        // Build the connector - native-tls automatically supports TLS 1.2 and 1.3
+        // This provides maximum compatibility with TAK servers
+        let tls_config = builder.build()
+            .context("Failed to build TLS config")?;
 
+        info!("TLS configuration built successfully with native-tls (OpenSSL backend)");
         Ok(tls_config)
     }
 
-    /// Load certificate bundle from file paths
-    fn load_bundle_from_files(
-        cert_path: &PathBuf,
-        key_path: &PathBuf,
-        ca_cert_path: Option<&PathBuf>,
-    ) -> Result<CertificateBundle> {
-        // Load client certificate
-        let cert_file =
-            std::fs::File::open(cert_path).context("Failed to open client certificate file")?;
-        let mut cert_reader = BufReader::new(cert_file);
-
-        let certs: Vec<CertificateDer> = rustls_pemfile::certs(&mut cert_reader)
-            .collect::<Result<Vec<_>, _>>()
-            .context("Failed to parse client certificates")?;
-
-        if certs.is_empty() {
-            return Err(anyhow!("No certificates found in certificate file"));
-        }
-
-        // Load private key
-        let key_file = std::fs::File::open(key_path).context("Failed to open private key file")?;
-        let mut key_reader = BufReader::new(key_file);
-
-        let private_key = rustls_pemfile::private_key(&mut key_reader)
-            .context("Failed to read private key")?
-            .ok_or_else(|| anyhow!("No private key found in key file"))?;
-
-        // Load CA certificate if provided
-        let ca_certs = if let Some(ca_path) = ca_cert_path {
-            let ca_cert_file =
-                std::fs::File::open(ca_path).context("Failed to open CA certificate file")?;
-            let mut ca_cert_reader = BufReader::new(ca_cert_file);
-
-            let ca_certs: Vec<CertificateDer> = rustls_pemfile::certs(&mut ca_cert_reader)
-                .collect::<Result<Vec<_>, _>>()
-                .context("Failed to parse CA certificates")?;
-
-            if !ca_certs.is_empty() {
-                Some(ca_certs)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        Ok(CertificateBundle {
-            certs,
-            private_key,
-            ca_certs,
-        })
-    }
-
-    /// Extract server name from address
-    fn get_server_name(&self) -> Result<ServerName<'static>> {
-        let server_name = self
-            .config
+    /// Extract server name from address for SNI
+    fn get_server_name(&self) -> String {
+        self.config
             .server_name
             .as_ref()
-            .map(|s| s.as_str())
+            .map(|s| s.to_string())
             .unwrap_or_else(|| {
                 // Extract hostname from server_addr
                 self.config
@@ -345,10 +359,8 @@ impl TlsClient {
                     .split(':')
                     .next()
                     .unwrap_or("localhost")
-            });
-
-        ServerName::try_from(server_name.to_string())
-            .map_err(|e| anyhow!("Invalid server name: {}", e))
+                    .to_string()
+            })
     }
 
     /// Establish TLS connection
@@ -368,12 +380,12 @@ impl TlsClient {
         .context("Failed to connect")?;
 
         // Perform TLS handshake
-        let server_name = self.get_server_name()?;
-        let connector = TlsConnector::from(Arc::clone(&self.tls_config));
+        let server_name = self.get_server_name();
+        let connector = TlsConnector::from((*self.tls_config).clone());
 
         let tls_stream = timeout(
             self.config.base.connect_timeout,
-            connector.connect(server_name, tcp_stream),
+            connector.connect(&server_name, tcp_stream),
         )
         .await
         .context("TLS handshake timeout")?

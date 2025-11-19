@@ -4924,24 +4924,23 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.22.1",
  "bytes 1.10.1",
  "futures-util",
  "http 1.3.1",
+ "native-tls",
  "omnitak-cert",
  "omnitak-core",
  "parking_lot 0.12.5",
- "rustls",
- "rustls-pemfile",
  "serde",
  "socket2 0.5.10",
  "thiserror 2.0.17",
  "tokio",
- "tokio-rustls",
+ "tokio-native-tls",
  "tokio-stream",
  "tokio-tungstenite",
  "tokio-util",
  "tracing",
- "webpki-roots 0.26.11",
 ]
 
 [[package]]
