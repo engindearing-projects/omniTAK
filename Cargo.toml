@@ -140,6 +140,10 @@ omnitak-plugin-api = { path = "crates/omnitak-plugin-api" }
 
 tokio = { workspace = true }
 tokio-stream = "0.1"
+tokio-rustls = { workspace = true }
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+bytes = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
@@ -152,11 +156,17 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 eframe = { workspace = true }
 egui = { workspace = true }
+libc = "0.2"
 
 [dev-dependencies]
 # Integration test dependencies
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+omnitak-pool = { path = "crates/omnitak-pool" }
+tokio = { workspace = true }
 tokio-test = "0.4"
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 
 [profile.release]
 opt-level = 3

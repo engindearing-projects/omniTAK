@@ -12,9 +12,14 @@ omnitak-cert = { path = "../omnitak-cert" }
 tokio = { version = "1.42", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 
-# TLS support - using native-tls for maximum TAK server compatibility
+# TLS support - using both native-tls and rustls for cross-platform support
 tokio-native-tls = "0.3"
 native-tls = "0.2"
+tokio-rustls = { version = "0.26", features = ["ring"] }
+rustls = { version = "0.23", features = ["std", "tls12"] }
+rustls-pemfile = "2.2"
+p12 = "0.6"
+webpki-roots = "0.26"
 
 # WebSocket support
 tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }

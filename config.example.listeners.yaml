@@ -1,0 +1,203 @@
+# OmniTAK Listeners Configuration Example
+# This file demonstrates how to configure incoming TAK connection listeners
+# Copy relevant sections to your main config.yaml
+
+# API Configuration (existing)
+api:
+  bind_addr: "127.0.0.1:9443"
+  enable_tls: false
+
+# Outgoing TAK Server Connections (existing)
+servers:
+  - id: tak-server-production
+    address: "takserver.example.com:8089"
+    protocol: tls
+    tls:
+      cert_path: "/path/to/certs/client-cert.pem"
+      key_path: "/path/to/certs/client-key.pem"
+      ca_path: "/path/to/certs/ca.pem"
+
+# ============================================================================
+# LISTENERS - Accept incoming TAK connections from clients
+# ============================================================================
+# Listeners allow TAK clients (ATAK, WinTAK, iTAK) to connect to OmniTAK
+# and receive aggregated data from multiple TAK servers.
+#
+# SECURITY BEST PRACTICES:
+# 1. Always use TLS in production environments
+# 2. Require client certificate authentication (mutual TLS)
+# 3. Use strong passwords and rotate certificates regularly
+# 4. Bind to specific interfaces (not 0.0.0.0) when possible
+# 5. Monitor connection counts and implement rate limiting
+# 6. Keep certificates in secure locations with restricted permissions
+# 7. Use separate CA certificates for different security domains
+# ============================================================================
+
+listeners:
+  # Basic TCP Listener (Development/Testing Only)
+  # WARNING: TCP has NO encryption - use only in isolated/trusted networks
+  - id: tcp-listener-8087
+    # Enable or disable this listener
+    enabled: true
+
+    # Bind address and port
+    # Use 0.0.0.0 to listen on all interfaces
+    # Use 127.0.0.1 for localhost only (testing)
+    # Use specific IP for production (e.g., "10.0.1.50:8087")
+    bind_addr: "0.0.0.0:8087"
+
+    # Protocol: tcp or tls
+    protocol: tcp
+
+    # Maximum concurrent connections allowed
+    # Adjust based on system resources and expected load
+    max_connections: 100
+
+  # TLS Listener with Mutual Authentication (Production)
+  # This is the RECOMMENDED configuration for production deployments
+  - id: tls-listener-8089
+    enabled: true
+    bind_addr: "0.0.0.0:8089"
+    protocol: tls
+    max_connections: 100
+
+    # TLS configuration section (required when protocol is 'tls')
+    tls:
+      # Server certificate (identifies this OmniTAK instance to clients)
+      # Generate with: openssl req -new -x509 -days 365 -key server-key.pem -out server-cert.pem
+      cert_path: "/path/to/certs/server-cert.pem"
+
+      # Server private key (must be in traditional RSA format)
+      # Convert PKCS#8 to RSA: openssl rsa -in pkcs8-key.pem -out server-key.pem
+      key_path: "/path/to/certs/server-key.pem"
+
+      # Client authentication (mutual TLS)
+      client_auth:
+        # Require clients to present valid certificates
+        required: true
+
+        # CA certificate that signed client certificates
+        # Only clients with certificates signed by this CA can connect
+        ca_path: "/path/to/certs/client-ca.pem"
+
+  # TLS Listener without Client Auth (Less Secure)
+  # Useful for testing or when client certificate management is impractical
+  # Still provides encryption but cannot verify client identity
+  - id: tls-listener-8090
+    enabled: false  # Disabled by default
+    bind_addr: "0.0.0.0:8090"
+    protocol: tls
+    max_connections: 50
+
+    tls:
+      cert_path: "/path/to/certs/server-cert.pem"
+      key_path: "/path/to/certs/server-key.pem"
+      # No client_auth section = clients don't need certificates
+      # However, connection is still encrypted
+
+  # High-Capacity Listener (Production with Many Clients)
+  - id: tls-listener-high-capacity
+    enabled: false
+    bind_addr: "10.0.1.100:8089"  # Specific interface
+    protocol: tls
+    max_connections: 500  # Higher limit for large deployments
+
+    tls:
+      cert_path: "/path/to/certs/server-cert.pem"
+      key_path: "/path/to/certs/server-key.pem"
+      client_auth:
+        required: true
+        ca_path: "/path/to/certs/client-ca.pem"
+
+  # Separate Listener for Different Security Domain
+  # Example: Different CA for coalition partners
+  - id: tls-listener-coalition
+    enabled: false
+    bind_addr: "0.0.0.0:8091"
+    protocol: tls
+    max_connections: 100
+
+    tls:
+      # Can use same server cert or different one
+      cert_path: "/path/to/certs/server-cert.pem"
+      key_path: "/path/to/certs/server-key.pem"
+      client_auth:
+        required: true
+        # Different CA for coalition partners
+        ca_path: "/path/to/certs/coalition-ca.pem"
+
+# ============================================================================
+# CERTIFICATE MANAGEMENT
+# ============================================================================
+#
+# Generate Server Certificates:
+# ------------------------------
+# 1. Generate server private key:
+#    openssl genrsa -out server-key.pem 2048
+#
+# 2. Generate server certificate signing request:
+#    openssl req -new -key server-key.pem -out server.csr
+#
+# 3. Self-sign (testing) or send CSR to your CA (production):
+#    openssl x509 -req -days 365 -in server.csr -signkey server-key.pem -out server-cert.pem
+#
+# Generate Client Certificates:
+# ------------------------------
+# 1. Create CA key and certificate (if you don't have one):
+#    openssl genrsa -out client-ca-key.pem 2048
+#    openssl req -new -x509 -days 3650 -key client-ca-key.pem -out client-ca.pem
+#
+# 2. Generate client key:
+#    openssl genrsa -out client-key.pem 2048
+#
+# 3. Generate client CSR:
+#    openssl req -new -key client-key.pem -out client.csr
+#
+# 4. Sign client certificate with CA:
+#    openssl x509 -req -days 365 -in client.csr -CA client-ca.pem \
+#      -CAkey client-ca-key.pem -CAcreateserial -out client-cert.pem
+#
+# Certificate Permissions:
+# ------------------------
+# Ensure certificate files have restricted permissions:
+#   chmod 600 /path/to/certs/*.pem
+#   chown omnitak:omnitak /path/to/certs/*.pem
+#
+# ============================================================================
+# COMMON PORTS
+# ============================================================================
+# 8087 - TAK Server streaming (TCP, unencrypted)
+# 8089 - TAK Server streaming (TLS/SSL, encrypted)
+# 8443 - TAK Server REST API
+# 9443 - OmniTAK REST API (this application)
+#
+# ============================================================================
+# TROUBLESHOOTING
+# ============================================================================
+#
+# Port already in use:
+# - Check for conflicts with other listeners or servers
+# - Verify no other process is using the port: netstat -tulpn | grep <port>
+#
+# TLS handshake failures:
+# - Verify certificate paths are correct and files exist
+# - Check certificate permissions (must be readable by OmniTAK process)
+# - Ensure certificates are in PEM format, not DER
+# - Verify private key is in traditional RSA format (not PKCS#8)
+# - Check client certificates are signed by the specified CA
+# - Review logs for specific error messages
+#
+# Client cannot connect:
+# - Verify firewall rules allow inbound connections
+# - Check bind address (0.0.0.0 vs specific IP)
+# - Ensure listener is enabled (enabled: true)
+# - Verify protocol matches client configuration
+# - For TLS: ensure client has valid certificate if client_auth.required is true
+#
+# High connection counts:
+# - Increase max_connections if legitimate traffic
+# - Monitor for potential DoS attacks
+# - Consider implementing connection rate limiting
+# - Review system resource limits (ulimit -n)
+#
+# ============================================================================

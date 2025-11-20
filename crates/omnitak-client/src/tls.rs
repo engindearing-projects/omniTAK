@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use bytes::{Buf, BytesMut};
 use omnitak_cert::{CertificateBundle, CertificateData};
 use native_tls::{Certificate, Identity, TlsConnector as NativeTlsConnector};
+use std::error::Error;
 use std::path::PathBuf;
 use base64::Engine;
 use std::sync::Arc;
@@ -269,25 +270,30 @@ impl TlsClient {
                     info!("Loaded client certificate and key from PEM files (converted to P12)");
                 }
 
-                // Load CA certificate if provided
+                // Load CA certificate if provided AND if we're verifying certs
+                // Skip CA loading when verification is disabled to avoid macOS Security.framework issues
                 if let Some(ca_path) = ca_cert_path {
-                    let ca_data = std::fs::read(ca_path)
-                        .context("Failed to read CA certificate file")?;
+                    if config.verify_server {
+                        let ca_data = std::fs::read(ca_path)
+                            .context("Failed to read CA certificate file")?;
 
-                    // Try loading as PEM first, then as P12 truststore
-                    let ca_cert = Certificate::from_pem(&ca_data)
-                        .or_else(|_| {
-                            // If PEM loading fails, try as P12 truststore
-                            // Extract CA certs from P12 file
-                            Identity::from_pkcs12(&ca_data, "")
-                                .or_else(|_| Identity::from_pkcs12(&ca_data, "changeit"))
-                                .map_err(|e| anyhow!("Failed to load CA from P12: {}", e))
-                                .and_then(|_| Err(anyhow!("P12 CA extraction not yet implemented, please use PEM format for CA")))
-                        })
-                        .context("Failed to load CA certificate (tried PEM and P12 formats)")?;
+                        // Try loading as PEM first, then as P12 truststore
+                        let ca_cert = Certificate::from_pem(&ca_data)
+                            .or_else(|_| {
+                                // If PEM loading fails, try as P12 truststore
+                                // Extract CA certs from P12 file
+                                Identity::from_pkcs12(&ca_data, "")
+                                    .or_else(|_| Identity::from_pkcs12(&ca_data, "changeit"))
+                                    .map_err(|e| anyhow!("Failed to load CA from P12: {}", e))
+                                    .and_then(|_| Err(anyhow!("P12 CA extraction not yet implemented, please use PEM format for CA")))
+                            })
+                            .context("Failed to load CA certificate (tried PEM and P12 formats)")?;
 
-                    builder.add_root_certificate(ca_cert);
-                    info!("Loaded custom CA certificate from file");
+                        builder.add_root_certificate(ca_cert);
+                        info!("Loaded custom CA certificate from file");
+                    } else {
+                        info!("Skipping CA certificate loading because server verification is disabled");
+                    }
                 }
             }
             TlsCertSource::Memory {
@@ -313,15 +319,19 @@ impl TlsClient {
                     .context("Failed to create identity from memory")?;
                 builder.identity(identity);
 
-                // Load CA if provided
+                // Load CA if provided AND if we're verifying certs
                 if let Some(ca) = ca_data {
-                    let ca_bytes = base64::engine::general_purpose::STANDARD
-                        .decode(&ca.data)
-                        .context("Failed to decode CA from base64")?;
-                    let ca_cert = Certificate::from_pem(&ca_bytes)
-                        .context("Failed to load CA certificate from memory")?;
-                    builder.add_root_certificate(ca_cert);
-                    info!("Loaded custom CA certificate from memory");
+                    if config.verify_server {
+                        let ca_bytes = base64::engine::general_purpose::STANDARD
+                            .decode(&ca.data)
+                            .context("Failed to decode CA from base64")?;
+                        let ca_cert = Certificate::from_pem(&ca_bytes)
+                            .context("Failed to load CA certificate from memory")?;
+                        builder.add_root_certificate(ca_cert);
+                        info!("Loaded custom CA certificate from memory");
+                    } else {
+                        info!("Skipping CA certificate loading because server verification is disabled");
+                    }
                 }
             }
             TlsCertSource::Bundle(_bundle) => {
@@ -381,17 +391,32 @@ impl TlsClient {
 
         // Perform TLS handshake
         let server_name = self.get_server_name();
+        info!("Attempting TLS handshake with server name: {}", server_name);
         let connector = TlsConnector::from((*self.tls_config).clone());
 
-        let tls_stream = timeout(
+        let tls_stream = match timeout(
             self.config.base.connect_timeout,
             connector.connect(&server_name, tcp_stream),
         )
         .await
-        .context("TLS handshake timeout")?
-        .context("TLS handshake failed")?;
-
-        info!("TLS handshake successful");
+        {
+            Ok(Ok(stream)) => {
+                info!("TLS handshake successful");
+                stream
+            }
+            Ok(Err(e)) => {
+                error!("TLS handshake failed with detailed error: {:?}", e);
+                error!("Error source chain: {}", e);
+                if let Some(source) = e.source() {
+                    error!("Error source: {:?}", source);
+                }
+                return Err(anyhow!("TLS handshake failed: {}", e));
+            }
+            Err(_) => {
+                error!("TLS handshake timeout after {:?}", self.config.base.connect_timeout);
+                return Err(anyhow!("TLS handshake timeout"));
+            }
+        };
 
         self.stream = Some(tls_stream);
         self.status.set_state(ConnectionState::Connected);
