@@ -10,6 +10,7 @@ use omnitak_core::types::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -38,8 +39,17 @@ pub struct OmniTakApp {
     /// API client (unified mode - preferred)
     pub api_client: Option<ApiClient>,
 
+    /// Shared tokio runtime for async operations
+    pub runtime: tokio::runtime::Runtime,
+
+    /// Embedded API server process
+    pub embedded_server: Option<Child>,
+
     /// API server URL
     pub api_url: String,
+
+    /// API server port
+    pub api_port: u16,
 
     /// Login credentials
     pub login_username: String,
@@ -77,14 +87,24 @@ pub enum StatusLevel {
 
 impl Default for OmniTakApp {
     fn default() -> Self {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create tokio runtime");
+
+        let api_port = 9443;
+
         Self {
             state: Arc::new(Mutex::new(AppState::default())),
             ui_state: UiState::default(),
             backend: None,
             api_client: None,
-            api_url: "http://localhost:9443".to_string(),
+            runtime,
+            embedded_server: None,
+            api_url: format!("http://localhost:{}", api_port),
+            api_port,
             login_username: "admin".to_string(),
-            login_password: String::new(),
+            login_password: "omnitak123".to_string(), // Default password for embedded server
             login_error: None,
             is_authenticated: false,
             status_message: None,
@@ -447,6 +467,45 @@ impl ServerDialogState {
 }
 
 impl OmniTakApp {
+    /// Starts the embedded API server
+    fn start_embedded_server(port: u16) -> Option<Child> {
+        // Try to find the omnitak binary in several locations
+        let possible_paths = vec![
+            // Same directory as the GUI binary (for app bundle) - macOS case-insensitive fix
+            std::env::current_exe()
+                .ok()?
+                .parent()?
+                .join("omnitak-server"),
+            // Development build location
+            PathBuf::from("target/release/omnitak"),
+            // Installed location
+            PathBuf::from("/usr/local/bin/omnitak"),
+        ];
+
+        let server_path = possible_paths.iter().find(|p| p.exists())?;
+
+        tracing::info!("Starting embedded API server from: {}", server_path.display());
+
+        // Start the server process
+        let child = Command::new(server_path)
+            .arg("--bind")
+            .arg(format!("0.0.0.0:{}", port))
+            .arg("--admin-user")
+            .arg("admin")
+            .arg("--admin-password")
+            .arg("omnitak123")
+            .env("RUST_LOG", "info")
+            .spawn()
+            .ok()?;
+
+        tracing::info!("Embedded API server started with PID: {}", child.id());
+
+        // Give the server a moment to start
+        std::thread::sleep(Duration::from_secs(2));
+
+        Some(child)
+    }
+
     /// Creates a new OmniTAK GUI application.
     pub fn new(cc: &eframe::CreationContext<'_>, config_path: Option<PathBuf>) -> Self {
         // Load state from config file if provided, otherwise use storage
@@ -472,8 +531,22 @@ impl OmniTakApp {
             Default::default()
         };
 
+        // Create shared tokio runtime
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create tokio runtime");
+
+        // Start embedded API server
+        let api_port = 9443;
+        let embedded_server = Self::start_embedded_server(api_port);
+
+        if embedded_server.is_none() {
+            tracing::warn!("Failed to start embedded API server - will try to connect to external server");
+        }
+
         // Initialize API client (unified mode)
-        let api_url = "http://localhost:9443".to_string();
+        let api_url = format!("http://localhost:{}", api_port);
         let api_client = match ApiClient::new(&api_url) {
             Ok(client) => {
                 tracing::info!("API client initialized for {}", api_url);
@@ -493,9 +566,12 @@ impl OmniTakApp {
             },
             backend: None, // Deprecated - using API client now
             api_client,
+            runtime,
+            embedded_server,
             api_url,
+            api_port,
             login_username: "admin".to_string(),
-            login_password: String::new(),
+            login_password: "omnitak123".to_string(), // Default password for embedded server
             login_error: None,
             is_authenticated: false,
             status_message: None,
@@ -589,8 +665,7 @@ impl OmniTakApp {
             priority: None,
         };
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        match rt.block_on(api_client.create_connection(request)) {
+        match self.runtime.block_on(api_client.create_connection(request)) {
             Ok(id) => {
                 tracing::info!("Created connection {} with ID: {}", config.name, id);
                 self.show_status(
@@ -626,8 +701,7 @@ impl OmniTakApp {
         };
 
         // Find the connection ID by name
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let connections = match rt.block_on(api_client.list_connections()) {
+        let connections = match self.runtime.block_on(api_client.list_connections()) {
             Ok(conns) => conns,
             Err(e) => {
                 tracing::error!("Failed to list connections: {}", e);
@@ -646,7 +720,7 @@ impl OmniTakApp {
             .map(|c| c.id.clone());
 
         if let Some(id) = connection_id {
-            match rt.block_on(api_client.delete_connection(&id)) {
+            match self.runtime.block_on(api_client.delete_connection(&id)) {
                 Ok(()) => {
                     tracing::info!("Deleted connection: {}", server_name);
                     self.show_status(
@@ -851,9 +925,8 @@ impl OmniTakApp {
         let username = self.login_username.clone();
         let password = self.login_password.clone();
 
-        // Use tokio runtime to make the async call
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        match rt.block_on(api_client.login(&username, &password)) {
+        // Use shared tokio runtime to make the async call
+        match self.runtime.block_on(api_client.login(&username, &password)) {
             Ok(()) => {
                 self.is_authenticated = true;
                 self.login_error = None;
@@ -877,10 +950,8 @@ impl OmniTakApp {
             None => return,
         };
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-
         // Get system status
-        if let Ok(status) = rt.block_on(api_client.get_status()) {
+        if let Ok(status) = self.runtime.block_on(api_client.get_status()) {
             let mut state = self.state.lock().unwrap();
             state.metrics.active_connections = status.active_connections;
             state.metrics.total_messages_received = status.messages_processed;
@@ -888,7 +959,7 @@ impl OmniTakApp {
         }
 
         // Get connections
-        if let Ok(connections) = rt.block_on(api_client.list_connections()) {
+        if let Ok(connections) = self.runtime.block_on(api_client.list_connections()) {
             let mut state = self.state.lock().unwrap();
             state.connections.clear();
 
@@ -936,6 +1007,17 @@ impl OmniTakApp {
                     state.servers.push(server_config);
                 }
             }
+        }
+    }
+}
+
+impl Drop for OmniTakApp {
+    fn drop(&mut self) {
+        // Gracefully shut down the embedded server
+        if let Some(mut server) = self.embedded_server.take() {
+            tracing::info!("Shutting down embedded API server (PID: {})", server.id());
+            let _ = server.kill();
+            let _ = server.wait();
         }
     }
 }
