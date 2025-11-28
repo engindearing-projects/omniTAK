@@ -360,6 +360,10 @@ async fn main() -> Result<()> {
         rate_limit_rps: 100,
         enable_swagger: true,
         enable_static_files: true,
+        enable_enrollment: true,
+        enrollment_ca_cert_path: None,
+        enrollment_ca_key_path: None,
+        enrollment_server_config: None,
     };
 
     // ═══════════════════════════════════════════════════════════════════════════

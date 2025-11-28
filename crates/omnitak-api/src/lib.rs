@@ -46,13 +46,16 @@ use middleware::{
     RateLimitState, ReadinessState, cors_layer, logging_middleware, rate_limit_middleware,
     request_id_middleware, security_headers_middleware, timeout_middleware,
 };
+use omnitak_cert::generator::CaConfig;
 use omnitak_plugin_api::PluginManager;
 use omnitak_pool::{
     AggregatorConfig, ConnectionPool, DistributionStrategy, DistributorConfig,
     MessageAggregator, MessageDistributor, PoolConfig,
 };
 use rest::ApiState;
+use rest::enrollment::EnrollmentState;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::signal;
@@ -60,7 +63,7 @@ use tokio::sync::RwLock;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use tracing::{error, info, warn};
-use types::UserRole;
+use types::{ServerConnectionConfig, UserRole};
 use utoipa::OpenApi;
 
 // ============================================================================
@@ -92,6 +95,18 @@ pub struct ServerConfig {
 
     /// Enable static file serving
     pub enable_static_files: bool,
+
+    /// Enable enrollment service
+    pub enable_enrollment: bool,
+
+    /// Enrollment CA certificate path (for persistence)
+    pub enrollment_ca_cert_path: Option<PathBuf>,
+
+    /// Enrollment CA key path (for persistence)
+    pub enrollment_ca_key_path: Option<PathBuf>,
+
+    /// Server connection config for enrollment data packages
+    pub enrollment_server_config: Option<ServerConnectionConfig>,
 }
 
 impl Default for ServerConfig {
@@ -105,6 +120,10 @@ impl Default for ServerConfig {
             rate_limit_rps: 100,
             enable_swagger: true,
             enable_static_files: true,
+            enable_enrollment: true,
+            enrollment_ca_cert_path: None,
+            enrollment_ca_key_path: None,
+            enrollment_server_config: None,
         }
     }
 }
@@ -332,20 +351,23 @@ impl Server {
             discovery: None, // TODO: Initialize discovery service if enabled in config
         };
 
-        // Initialize plugin manager
+        // Initialize plugin manager in a blocking task to avoid blocking the async runtime
+        // (wasmtime Engine creation with Cranelift JIT compilation is CPU-intensive)
         info!("Initializing plugin manager");
-        let plugin_manager = match PluginManager::new(omnitak_plugin_api::PluginManagerConfig::default()) {
-            Ok(manager) => Arc::new(RwLock::new(manager)),
-            Err(e) => {
-                warn!("Failed to initialize plugin manager: {}, plugins will be disabled", e);
-                // Create a minimal manager as a fallback
-                Arc::new(RwLock::new(PluginManager::new(omnitak_plugin_api::PluginManagerConfig {
-                    plugin_dir: "./plugins".to_string(),
-                    hot_reload: false,
-                    ..Default::default()
-                }).unwrap_or_else(|_| panic!("Critical: Could not initialize plugin manager"))))
+        let plugin_manager = tokio::task::spawn_blocking(|| {
+            match PluginManager::new(omnitak_plugin_api::PluginManagerConfig::default()) {
+                Ok(manager) => Arc::new(RwLock::new(manager)),
+                Err(e) => {
+                    warn!("Failed to initialize plugin manager: {}, plugins will be disabled", e);
+                    // Create a minimal manager as a fallback
+                    Arc::new(RwLock::new(PluginManager::new(omnitak_plugin_api::PluginManagerConfig {
+                        plugin_dir: "./plugins".to_string(),
+                        hot_reload: false,
+                        ..Default::default()
+                    }).unwrap_or_else(|_| panic!("Critical: Could not initialize plugin manager"))))
+                }
             }
-        };
+        }).await.expect("Plugin manager spawn_blocking failed");
         let plugin_state = rest::plugins::PluginApiState {
             plugin_manager,
             audit_logger: audit_logger.clone(),
@@ -366,6 +388,44 @@ impl Server {
 
         // Add WebSocket routes
         app = app.merge(websocket::create_ws_router(ws_state.clone()));
+
+        // Add enrollment routes if enabled
+        if self.config.enable_enrollment {
+            info!("Initializing enrollment service");
+            let mut enrollment_state = EnrollmentState::new(audit_logger.clone());
+
+            // Set CA paths if configured
+            enrollment_state.ca_cert_path = self.config.enrollment_ca_cert_path.clone();
+            enrollment_state.ca_key_path = self.config.enrollment_ca_key_path.clone();
+
+            // Initialize CA
+            if let Err(e) = enrollment_state.initialize_ca(None).await {
+                error!("Failed to initialize enrollment CA: {}", e);
+            } else {
+                // Set server config if provided
+                if let Some(server_config) = &self.config.enrollment_server_config {
+                    enrollment_state.set_server_config(server_config.clone()).await;
+                } else {
+                    // Auto-detect from bind address
+                    let host = if self.config.bind_addr.ip().is_unspecified() {
+                        "localhost".to_string()
+                    } else {
+                        self.config.bind_addr.ip().to_string()
+                    };
+                    let server_config = ServerConnectionConfig {
+                        host,
+                        streaming_port: 8089,
+                        api_port: self.config.bind_addr.port(),
+                        description: Some("OmniTAK Server".to_string()),
+                        use_tls: self.config.enable_tls,
+                    };
+                    enrollment_state.set_server_config(server_config).await;
+                }
+
+                app = app.merge(rest::enrollment::create_enrollment_router(enrollment_state));
+                info!("Enrollment service enabled at /api/v1/enrollment/*");
+            }
+        }
 
         // Add OpenAPI JSON endpoint if enabled
         if self.config.enable_swagger {
@@ -431,12 +491,11 @@ impl Server {
             info!("WARNING: TLS disabled - not suitable for production use!");
         }
 
-        // Run server with graceful shutdown
+        // Run server (graceful shutdown handled by parent caller via tokio::select!)
         axum::serve(
             listener,
             app.into_make_service_with_connect_info::<SocketAddr>(),
         )
-        .with_graceful_shutdown(shutdown_signal())
         .await?;
 
         info!("Server shutdown complete");

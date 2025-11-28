@@ -3,8 +3,10 @@
 //! Handles loading, parsing, and validating certificates for TAK server connections.
 //! Supports PEM, DER, and PKCS#12 formats with password protection.
 //! Includes certificate enrollment for TAK servers requiring username/password authentication.
+//! Also provides certificate generation for OmniTAK's own enrollment server.
 
 pub mod enrollment;
+pub mod generator;
 
 use anyhow::{Context, Result, anyhow};
 use base64::prelude::*;

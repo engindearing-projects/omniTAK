@@ -191,7 +191,7 @@ async fn handle_send_messages(
     while let Some(message) = client_rx.recv().await {
         match serde_json::to_string(&message) {
             Ok(json) => {
-                if let Err(e) = sender.send(Message::Text(json)).await {
+                if let Err(e) = sender.send(Message::Text(json.into())).await {
                     error!(client_id = %client_id, error = %e, "Failed to send message");
                     break;
                 }

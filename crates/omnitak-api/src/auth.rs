@@ -7,7 +7,7 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use axum::{
-    Json, RequestPartsExt, async_trait,
+    Json, RequestPartsExt,
     extract::FromRequestParts,
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
@@ -319,7 +319,6 @@ impl AuthUser {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for AuthUser
 where
     S: Send + Sync,
@@ -377,7 +376,6 @@ where
 /// Require admin role
 pub struct RequireAdmin(pub AuthUser);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for RequireAdmin
 where
     S: Send + Sync,
@@ -398,7 +396,6 @@ where
 /// Require operator role or higher
 pub struct RequireOperator(pub AuthUser);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for RequireOperator
 where
     S: Send + Sync,

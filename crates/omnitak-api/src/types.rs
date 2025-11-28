@@ -579,3 +579,151 @@ pub struct SendCotResponse {
     /// Timestamp when message was processed
     pub timestamp: DateTime<Utc>,
 }
+
+// ============================================================================
+// Enrollment (Data Package Server)
+// ============================================================================
+
+/// Request to create an enrollment token
+#[derive(Debug, Serialize, Deserialize, Validate, ToSchema)]
+pub struct CreateEnrollmentTokenRequest {
+    /// Username/device name for the enrollment
+    #[validate(length(min = 1, max = 100))]
+    pub username: String,
+
+    /// Validity period in hours (default: 24)
+    #[serde(default = "default_token_validity_hours")]
+    pub validity_hours: u32,
+
+    /// Maximum number of uses (None = unlimited)
+    pub max_uses: Option<u32>,
+
+    /// Certificate validity in days (default: 365)
+    #[serde(default = "default_cert_validity_days")]
+    pub cert_validity_days: u32,
+}
+
+fn default_token_validity_hours() -> u32 {
+    24
+}
+
+fn default_cert_validity_days() -> u32 {
+    365
+}
+
+/// Response after creating an enrollment token
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct CreateEnrollmentTokenResponse {
+    /// Token ID
+    pub id: String,
+
+    /// The enrollment token (for URL)
+    pub token: String,
+
+    /// Full enrollment URL
+    pub enrollment_url: String,
+
+    /// Username this token is for
+    pub username: String,
+
+    /// When the token expires
+    pub expires_at: DateTime<Utc>,
+
+    /// Maximum uses allowed
+    pub max_uses: Option<u32>,
+}
+
+/// Enrollment token info (admin view)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EnrollmentTokenInfo {
+    /// Token ID
+    pub id: String,
+
+    /// Username/device name
+    pub username: String,
+
+    /// When the token was created
+    pub created_at: DateTime<Utc>,
+
+    /// When the token expires
+    pub expires_at: DateTime<Utc>,
+
+    /// Whether the token has been used
+    pub used: bool,
+
+    /// Use count
+    pub use_count: u32,
+
+    /// Maximum uses allowed
+    pub max_uses: Option<u32>,
+
+    /// Whether the token is still valid
+    pub is_valid: bool,
+}
+
+/// List of enrollment tokens
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct EnrollmentTokenList {
+    pub tokens: Vec<EnrollmentTokenInfo>,
+    pub total: usize,
+}
+
+/// Server configuration for data package
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ServerConnectionConfig {
+    /// Server hostname or IP
+    pub host: String,
+
+    /// Streaming port (default: 8089 for TLS, 8087 for TCP)
+    pub streaming_port: u16,
+
+    /// API port (default: 8443)
+    pub api_port: u16,
+
+    /// Server description/name
+    pub description: Option<String>,
+
+    /// Whether to use TLS for streaming
+    pub use_tls: bool,
+}
+
+impl Default for ServerConnectionConfig {
+    fn default() -> Self {
+        Self {
+            host: "localhost".to_string(),
+            streaming_port: 8089,
+            api_port: 8443,
+            description: Some("OmniTAK Server".to_string()),
+            use_tls: true,
+        }
+    }
+}
+
+/// Enrollment status response
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct EnrollmentStatus {
+    /// Whether enrollment is enabled
+    pub enabled: bool,
+
+    /// Number of active tokens
+    pub active_tokens: usize,
+
+    /// Number of enrolled clients
+    pub enrolled_clients: usize,
+
+    /// CA certificate info (subject, expiry)
+    pub ca_info: Option<CaInfo>,
+}
+
+/// CA certificate information
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct CaInfo {
+    /// CA subject common name
+    pub subject_cn: String,
+
+    /// CA expiration date
+    pub expires_at: String,
+
+    /// Days until expiration
+    pub days_until_expiry: i64,
+}

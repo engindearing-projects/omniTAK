@@ -1,7 +1,7 @@
 [package]
 name = "omnitak-api"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 # Core dependencies
@@ -14,10 +14,11 @@ omnitak-cert = { path = "../omnitak-cert" }
 omnitak-adb = { path = "../omnitak-adb" }
 omnitak-discovery = { path = "../omnitak-discovery" }
 omnitak-plugin-api = { path = "../omnitak-plugin-api", features = ["openapi"] }
+omnitak-datapackage = { path = "../omnitak-datapackage" }
 
 # Axum web framework
-axum = { version = "0.7", features = ["ws", "macros"] }
-axum-extra = { version = "0.9", features = ["typed-header"] }
+axum = { version = "0.8", features = ["ws", "macros"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
 tower = { version = "0.5", features = ["full"] }
 tower-http = { version = "0.6", features = ["fs", "trace", "cors", "compression-gzip", "limit"] }
 
@@ -54,14 +55,18 @@ utoipa = { version = "5.3", features = ["axum_extras", "chrono", "uuid"] }
 
 # Security
 rustls = { version = "0.23", features = ["std", "ring"] }
+rustls-pemfile = "2.2"
 tokio-rustls = { version = "0.26", features = ["ring"] }
 
 # Static file embedding
 rust-embed = { version = "8.5", features = ["compression"] }
 
 # Error handling
-thiserror = "1.0"
+thiserror = "2.0"
 anyhow = "1.0"
+
+# P12/PKCS12 support
+p12 = "0.6"
 
 # Utilities
 uuid = { version = "1.10", features = ["serde", "v4"] }
