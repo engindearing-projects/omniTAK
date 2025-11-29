@@ -251,7 +251,7 @@ pub async fn list_discovered_services(
     Ok(Json(list))
 }
 
-/// GET /api/v1/discovery/services/:id - Get a specific discovered service
+/// GET /api/v1/discovery/services/{id} - Get a specific discovered service
 #[utoipa::path(
     get,
     path = "/api/v1/discovery/services/{id}",

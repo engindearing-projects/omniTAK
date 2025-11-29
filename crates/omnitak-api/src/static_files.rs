@@ -28,7 +28,7 @@ struct StaticAssets;
 pub fn create_static_router() -> Router {
     Router::new()
         .route("/", get(serve_index))
-        .route("/*path", get(serve_static_file))
+        .route("/{*path}", get(serve_static_file))
 }
 
 // ============================================================================

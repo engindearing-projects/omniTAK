@@ -146,19 +146,19 @@ pub fn create_plugin_router(state: PluginApiState) -> Router {
         .route("/api/v1/plugins", post(load_plugin))
 
         // Plugin details and management
-        .route("/api/v1/plugins/:id", get(get_plugin_details))
-        .route("/api/v1/plugins/:id", delete(unload_plugin))
+        .route("/api/v1/plugins/{id}", get(get_plugin_details))
+        .route("/api/v1/plugins/{id}", delete(unload_plugin))
 
         // Plugin configuration
-        .route("/api/v1/plugins/:id/config", put(update_plugin_config))
-        .route("/api/v1/plugins/:id/toggle", post(toggle_plugin))
+        .route("/api/v1/plugins/{id}/config", put(update_plugin_config))
+        .route("/api/v1/plugins/{id}/toggle", post(toggle_plugin))
 
         // Plugin metrics and health
-        .route("/api/v1/plugins/:id/metrics", get(get_plugin_metrics))
-        .route("/api/v1/plugins/:id/health", get(get_plugin_health))
+        .route("/api/v1/plugins/{id}/metrics", get(get_plugin_metrics))
+        .route("/api/v1/plugins/{id}/health", get(get_plugin_health))
 
         // Plugin reload
-        .route("/api/v1/plugins/:id/reload", post(reload_plugin))
+        .route("/api/v1/plugins/{id}/reload", post(reload_plugin))
 
         // Bulk operations
         .route("/api/v1/plugins/reload-all", post(reload_all_plugins))
@@ -288,7 +288,7 @@ async fn load_plugin(
     Ok((StatusCode::CREATED, Json(plugin_info)))
 }
 
-/// GET /api/v1/plugins/:id - Get plugin details
+/// GET /api/v1/plugins/{id} - Get plugin details
 #[utoipa::path(
     get,
     path = "/api/v1/plugins/{id}",
@@ -329,7 +329,7 @@ async fn get_plugin_details(
     Ok(Json(details))
 }
 
-/// DELETE /api/v1/plugins/:id - Unload a plugin
+/// DELETE /api/v1/plugins/{id} - Unload a plugin
 #[utoipa::path(
     delete,
     path = "/api/v1/plugins/{id}",
@@ -373,7 +373,7 @@ async fn unload_plugin(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// PUT /api/v1/plugins/:id/config - Update plugin configuration
+/// PUT /api/v1/plugins/{id}/config - Update plugin configuration
 #[utoipa::path(
     put,
     path = "/api/v1/plugins/{id}/config",
@@ -420,7 +420,7 @@ async fn update_plugin_config(
     Ok(StatusCode::OK)
 }
 
-/// POST /api/v1/plugins/:id/toggle - Enable/disable a plugin
+/// POST /api/v1/plugins/{id}/toggle - Enable/disable a plugin
 #[utoipa::path(
     post,
     path = "/api/v1/plugins/{id}/toggle",
@@ -461,7 +461,7 @@ async fn toggle_plugin(
     Ok(StatusCode::OK)
 }
 
-/// GET /api/v1/plugins/:id/metrics - Get plugin metrics
+/// GET /api/v1/plugins/{id}/metrics - Get plugin metrics
 #[utoipa::path(
     get,
     path = "/api/v1/plugins/{id}/metrics",
@@ -506,7 +506,7 @@ async fn get_plugin_metrics(
     Ok(Json(metrics))
 }
 
-/// GET /api/v1/plugins/:id/health - Get plugin health status
+/// GET /api/v1/plugins/{id}/health - Get plugin health status
 #[utoipa::path(
     get,
     path = "/api/v1/plugins/{id}/health",
@@ -546,7 +546,7 @@ async fn get_plugin_health(
     Ok(Json(health))
 }
 
-/// POST /api/v1/plugins/:id/reload - Reload a plugin
+/// POST /api/v1/plugins/{id}/reload - Reload a plugin
 #[utoipa::path(
     post,
     path = "/api/v1/plugins/{id}/reload",

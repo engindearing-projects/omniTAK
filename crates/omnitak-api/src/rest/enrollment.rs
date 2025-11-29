@@ -118,7 +118,7 @@ pub fn create_enrollment_router(state: EnrollmentState) -> Router {
         .route("/api/v1/enrollment/status", get(get_enrollment_status))
         .route("/api/v1/enrollment/tokens", get(list_tokens))
         .route("/api/v1/enrollment/tokens", post(create_token))
-        .route("/api/v1/enrollment/tokens/:id", delete(delete_token))
+        .route("/api/v1/enrollment/tokens/{id}", delete(delete_token))
         .route("/api/v1/enrollment/config", get(get_server_config))
         .route("/api/v1/enrollment/config", post(update_server_config))
         .with_state(state)
@@ -355,7 +355,7 @@ async fn create_token(
     ))
 }
 
-/// DELETE /api/v1/enrollment/tokens/:id
+/// DELETE /api/v1/enrollment/tokens/{id}
 /// Delete an enrollment token (admin only)
 async fn delete_token(
     State(state): State<EnrollmentState>,

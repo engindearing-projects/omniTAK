@@ -229,11 +229,12 @@ impl MessageDistributor {
             let mut last_flush = Instant::now();
 
             loop {
-                // Try to receive message with timeout for periodic flushing
-                let timeout = config.flush_interval.saturating_sub(last_flush.elapsed());
+                // Use async receive with tokio timeout for periodic flushing
+                // This avoids blocking the tokio runtime worker threads
+                let timeout_duration = config.flush_interval.saturating_sub(last_flush.elapsed());
 
-                match rx.recv_timeout(timeout) {
-                    Ok(msg) => {
+                match tokio::time::timeout(timeout_duration, rx.recv_async()).await {
+                    Ok(Ok(msg)) => {
                         batch.push(msg);
 
                         // Flush if batch is full or flush interval elapsed
@@ -245,17 +246,17 @@ impl MessageDistributor {
                             last_flush = Instant::now();
                         }
                     }
-                    Err(flume::RecvTimeoutError::Timeout) => {
-                        // Flush any pending messages
+                    Ok(Err(flume::RecvError::Disconnected)) => {
+                        warn!(worker_id, "Distribution channel disconnected");
+                        break;
+                    }
+                    Err(_elapsed) => {
+                        // Timeout - flush any pending messages
                         if !batch.is_empty() {
                             Self::distribute_batch(&pool, &filters, &metrics, &config, &mut batch)
                                 .await;
                             last_flush = Instant::now();
                         }
-                    }
-                    Err(flume::RecvTimeoutError::Disconnected) => {
-                        warn!(worker_id, "Distribution channel disconnected");
-                        break;
                     }
                 }
             }

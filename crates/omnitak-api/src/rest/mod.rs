@@ -57,13 +57,13 @@ pub fn create_rest_router(state: ApiState) -> Router {
         // Connection management
         .route("/api/v1/connections", get(list_connections))
         .route("/api/v1/connections", post(create_connection))
-        .route("/api/v1/connections/:id", get(get_connection))
-        .route("/api/v1/connections/:id", delete(delete_connection))
+        .route("/api/v1/connections/{id}", get(get_connection))
+        .route("/api/v1/connections/{id}", delete(delete_connection))
         // Filter management
         .route("/api/v1/filters", get(list_filters))
         .route("/api/v1/filters", post(create_filter))
-        .route("/api/v1/filters/:id", get(get_filter))
-        .route("/api/v1/filters/:id", delete(delete_filter))
+        .route("/api/v1/filters/{id}", get(get_filter))
+        .route("/api/v1/filters/{id}", delete(delete_filter))
         // CoT message injection
         .route("/api/v1/cot/send", post(send_cot_message))
         // Metrics
@@ -79,7 +79,7 @@ pub fn create_rest_router(state: ApiState) -> Router {
         // Discovery service routes (if enabled)
         .route("/api/v1/discovery/status", get(crate::discovery::get_discovery_status))
         .route("/api/v1/discovery/services", get(crate::discovery::list_discovered_services))
-        .route("/api/v1/discovery/services/:id", get(crate::discovery::get_discovered_service))
+        .route("/api/v1/discovery/services/{id}", get(crate::discovery::get_discovered_service))
         .route("/api/v1/discovery/refresh", post(crate::discovery::refresh_discovery))
         .route("/api/v1/discovery/tak-servers", get(crate::discovery::list_tak_servers))
         .route("/api/v1/discovery/atak-devices", get(crate::discovery::list_atak_devices))

@@ -81,6 +81,12 @@ struct TlsConfigDef {
     cert_path: String,
     key_path: String,
     ca_path: String,
+    #[serde(default = "default_verify_server")]
+    verify_server: bool,
+}
+
+fn default_verify_server() -> bool {
+    true
 }
 
 /// Listener protocol type
@@ -753,6 +759,7 @@ async fn main() -> Result<()> {
                 let mut client_config =
                     TlsClientConfig::new(cert_path, key_path).with_ca_cert(ca_path);
                 client_config.base.server_addr = server_def.address.clone();
+                client_config.verify_server = tls_config.verify_server;
 
                 // Clone for the async task
                 let address = server_def.address.clone();
